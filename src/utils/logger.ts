@@ -43,18 +43,13 @@ export function getLogger(): winston.Logger {
   );
 
   // Create logger
+  // Note: We only use file transport for MCP servers.
+  // Console output would corrupt the JSON-RPC protocol on stdout.
   logger = winston.createLogger({
     level: config.logging.level,
     format: logFormat,
     transports: [
-      // Console transport with color
-      new winston.transports.Console({
-        format: winston.format.combine(
-          winston.format.colorize(),
-          logFormat
-        ),
-      }),
-      // File transport
+      // File transport only (console output breaks MCP JSON-RPC protocol)
       new winston.transports.File({
         filename: config.logging.file,
         maxsize: 10485760, // 10MB

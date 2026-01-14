@@ -1,0 +1,42 @@
+{
+  "name": "akamai-mcp-server",
+  "version": "1.0.0",
+  "description": "Model Context Protocol server for Akamai APIs with EdgeGrid authentication",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "akamai-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "akamai",
+    "mcp",
+    "model-context-protocol",
+    "edgegrid",
+    "cdn",
+    "api"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "edgegrid": "^3.5.0",
+    "axios": "^1.7.9",
+    "winston": "^3.17.0",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

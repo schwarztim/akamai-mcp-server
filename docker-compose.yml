@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  akamai-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: akamai-mcp-server:latest
+    container_name: akamai-mcp-server
+    restart: unless-stopped
+
+    # Environment variables - REQUIRED: Set your Akamai credentials
+    environment:
+      # Akamai EdgeGrid Authentication
+      AKAMAI_HOST: ${AKAMAI_HOST}
+      AKAMAI_CLIENT_TOKEN: ${AKAMAI_CLIENT_TOKEN}
+      AKAMAI_CLIENT_SECRET: ${AKAMAI_CLIENT_SECRET}
+      AKAMAI_ACCESS_TOKEN: ${AKAMAI_ACCESS_TOKEN}
+
+      # Optional: Account Switch Key
+      # AKAMAI_ACCOUNT_KEY: ${AKAMAI_ACCOUNT_KEY}
+
+      # Logging Configuration
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FILE: logs/akamai-mcp.log
+
+      # Retry Configuration
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+      RETRY_DELAY_MS: ${RETRY_DELAY_MS:-1000}
+
+      # Request Timeout (milliseconds)
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-30000}
+
+      # Production environment
+      NODE_ENV: production
+
+    # Mount logs directory to persist logs
+    volumes:
+      - ./logs:/app/logs
+      # Optional: Mount custom configuration
+      # - ./config:/app/config:ro
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=akamai-mcp"
+
+    # No ports exposed (stdio communication only)
+    # network_mode: none  # Uncomment for maximum isolation (no network at all)
+
+    # Read-only root filesystem (optional, for extra security)
+    # read_only: true
+    # tmpfs:
+    #   - /tmp
+    #   - /app/logs
+
+  # Optional: Log aggregation service (for production monitoring)
+  # fluentd:
+  #   image: fluent/fluentd:latest
+  #   volumes:
+  #     - ./logs:/fluentd/log
+  #   ports:
+  #     - "24224:24224"
+
+  # Optional: Metrics and monitoring
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   volumes:
+  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  #   ports:
+  #     - "9090:9090"
+
+# Networks (if needed for multi-container setup)
+networks:
+  default:
+    name: akamai-mcp-network
+    driver: bridge
+
+# Volumes (for persistent data)
+volumes:
+  logs:
+    driver: local

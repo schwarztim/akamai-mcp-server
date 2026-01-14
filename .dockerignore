@@ -1,0 +1,70 @@
+# Node modules (will be installed in container)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output (will be built in container)
+dist/
+*.tsbuildinfo
+
+# Environment and credentials
+.env
+.env.*
+.edgerc
+
+# Logs
+logs/
+*.log
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (not needed in container)
+*.md
+docs/
+examples/
+ARCHITECTURE.md
+DEPLOYMENT.md
+LICENSE
+
+# Test files
+coverage/
+.nyc_output/
+test/
+tests/
+*.test.ts
+*.spec.ts
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker files (don't need docker in docker)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Misc
+README.md
+CHANGELOG.md
+CONTRIBUTING.md

@@ -255,19 +255,12 @@ export class ToolGenerator {
   }
 
   /**
-   * Build tool description (minimal to avoid bloating context)
+   * Build tool description (empty to minimize context bloat)
    */
-  private buildDescription(operation: OperationDefinition): string {
-    // Keep descriptions minimal - just summary
-    // Detailed info in tool name format: akamai_product_operation
-    let desc = operation.summary || `${operation.method} ${operation.path}`;
-
-    // Add pagination note if applicable
-    if (operation.supportsPagination) {
-      desc += ' [supports pagination: use paginate=true]';
-    }
-
-    return desc.trim();
+  private buildDescription(_operation: OperationDefinition): string {
+    // Return minimal description - tool names contain the info (akamai_product_operation)
+    // Adding any description causes context bloat with 1,447 tools
+    return '';
   }
 
   /**

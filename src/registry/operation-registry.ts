@@ -284,8 +284,19 @@ export class OperationRegistry {
    */
   private generateToolName(product: string, _version: string, operationId: string): string {
     // Format: akamai_{product}_{operation}
+    // MCP has a 64-character limit on tool names, so truncate if needed
     const normalizedProduct = product.replace(/-/g, '_');
-    return `akamai_${normalizedProduct}_${operationId}`;
+    let toolName = `akamai_${normalizedProduct}_${operationId}`;
+
+    if (toolName.length > 64) {
+      // Truncate operationId to fit within 64 chars
+      const prefix = `akamai_${normalizedProduct}_`;
+      const maxOpIdLength = 64 - prefix.length;
+      const truncatedOpId = operationId.substring(0, maxOpIdLength);
+      toolName = `${prefix}${truncatedOpId}`;
+    }
+
+    return toolName;
   }
 
   /**

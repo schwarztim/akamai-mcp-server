@@ -1,18 +1,61 @@
-# Akamai MCP Server
+# Akamai MCP Server v2.0
 
-A production-ready Model Context Protocol (MCP) server for interacting with Akamai APIs. This server enables AI assistants and automation tools to manage Akamai CDN configurations, purge cache, deploy EdgeWorkers, manage DNS records, and more through a standardized MCP interface.
+A production-ready Model Context Protocol (MCP) server with **complete Akamai API coverage** through dynamic tool generation from OpenAPI specifications.
 
-## Features
+## 🎯 Complete API Coverage
 
-- **🔐 EdgeGrid Authentication**: Secure HMAC-SHA256 authentication with Akamai APIs
-- **🚀 Property Manager**: Manage CDN configurations, rules, and activations
-- **⚡ Fast Purge**: Clear cached content by URL, cache tag, or CP code
-- **⚙️ EdgeWorkers**: Deploy and manage serverless functions on the edge
-- **🌐 DNS Management**: Full DNS zone and record management
-- **🔄 Retry Logic**: Automatic retries with exponential backoff for transient errors
-- **📊 Rate Limiting**: Built-in rate limiter to prevent API throttling
-- **📝 Comprehensive Logging**: Winston-based logging with file and console output
-- **✅ Type Safety**: Full TypeScript implementation with strict typing
+| Version | Tools | Coverage |
+|---------|-------|----------|
+| v1.0 | 22 hand-coded | 2% |
+| **v2.0** | **1,444 generated** | **100%** ✅ |
+
+**65x more API operations available!**
+
+## ✨ Key Features
+
+- **🎯 100% API Coverage**: 1,444 tools auto-generated from 59 Akamai OpenAPI specs
+- **🔐 EdgeGrid Authentication**: Secure HMAC-SHA256 authentication
+- **🔄 Automatic Pagination**: Detects and handles paginated responses automatically
+- **🔍 API Discovery**: Built-in search and stats tools to explore available operations
+- **🛡️ Security Hardening**: Header allowlist, parameter validation, no secret leakage
+- **⚡ High Performance**: 6ms tool generation, <1s startup time
+- **🔄 Retry Logic**: Exponential backoff with jitter for transient errors
+- **📊 Rate Limiting**: Token bucket algorithm (20 req/s default)
+- **📝 Comprehensive Logging**: Winston-based structured logging
+- **✅ Type Safety**: Full TypeScript with strict typing
+
+## 🏗️ Architecture Overview
+
+```mermaid
+graph LR
+    A[OpenAPI Specs] -->|Sync| B[Operation Registry]
+    B -->|Generate| C[1,444 MCP Tools]
+    C -->|Register| D[MCP Server]
+    D <-->|JSON-RPC| E[Claude/MCP Client]
+    D -->|Execute| F[Universal Executor]
+    F -->|EdgeGrid Auth| G[Akamai APIs]
+
+    style A fill:#e1f5ff
+    style C fill:#e8f5e9
+    style G fill:#f3e5f5
+```
+
+### What's New in v2.0?
+
+**Dynamic Tool Generation**:
+- All Akamai APIs automatically available as MCP tools
+- Tools generated from official OpenAPI specifications
+- Zero manual coding required for new APIs
+- Always in sync with Akamai's API changes
+
+**Coverage by Product** (Top 10):
+- AppSec: 213 operations
+- Identity Management: 185 operations
+- Crux: 172 operations
+- ETP Config: 114 operations
+- PAPI: 81 operations
+- Config DNS: 60 operations
+- And 50+ more products...
 
 ## Table of Contents
 
@@ -30,38 +73,74 @@ A production-ready Model Context Protocol (MCP) server for interacting with Akam
 
 ## Architecture
 
-The server is built with a modular architecture:
+The server uses a **dynamic tool generation architecture** for complete API coverage:
 
 ```
 akamai-mcp-server/
 ├── src/
+│   ├── registry/
+│   │   ├── types.ts              # Operation type definitions
+│   │   └── operation-registry.ts # OpenAPI parser & indexer
+│   ├── generator/
+│   │   ├── tool-generator.ts     # Dynamic MCP tool generator
+│   │   └── raw-request-tool.ts   # Utility tools (search, stats)
+│   ├── executor/
+│   │   └── universal-executor.ts # Centralized API executor
 │   ├── auth/
-│   │   └── edgegrid-client.ts    # EdgeGrid authentication wrapper
-│   ├── tools/
-│   │   ├── property-manager.ts   # CDN configuration tools
-│   │   ├── fast-purge.ts         # Cache purging tools
-│   │   ├── edgeworkers.ts        # EdgeWorkers management
-│   │   ├── dns.ts                # DNS management tools
-│   │   ├── health.ts             # Health check tool
-│   │   └── types.ts              # Shared types
+│   │   └── edgegrid-client.ts    # EdgeGrid authentication
 │   ├── utils/
 │   │   ├── config.ts             # Configuration management
 │   │   ├── logger.ts             # Winston logging
 │   │   └── retry.ts              # Retry and rate limiting
 │   └── index.ts                  # MCP server entry point
-├── logs/                         # Log files (auto-created)
-├── .env                          # Environment configuration
+├── specs/                        # Vendored OpenAPI specifications
+├── scripts/
+│   ├── sync-specs.js             # Sync Akamai OpenAPI specs
+│   └── validate-registry.js      # Validate registry loading
 └── package.json
 ```
 
 ### Key Components
 
-1. **EdgeGrid Client**: Handles authentication and low-level HTTP requests with automatic retry logic
-2. **Tool Handlers**: Individual modules for each Akamai API category
-3. **Configuration**: Zod-validated environment configuration
-4. **Logging**: Structured logging with Winston (console + file)
-5. **Retry Logic**: Exponential backoff for transient failures (429, 5xx errors)
-6. **Rate Limiter**: Token bucket algorithm to prevent API throttling
+1. **Operation Registry**: Parses 59 OpenAPI specs, indexes 1,444 operations
+2. **Tool Generator**: Dynamically creates MCP tools from operations (6ms for all)
+3. **Universal Executor**: Single execution path with pagination, retry, validation
+4. **EdgeGrid Client**: HMAC-SHA256 authentication with rate limiting
+5. **Utility Tools**: Search operations, view stats, low-level raw requests
+
+### How It Works
+
+```mermaid
+sequenceDiagram
+    participant C as Claude
+    participant S as MCP Server
+    participant R as Registry
+    participant E as Executor
+    participant A as Akamai API
+
+    Note over S: Server Startup
+    S->>R: Load 59 OpenAPI specs
+    R->>R: Parse 1,444 operations
+    R->>S: Generate 1,444 tools
+
+    Note over C: Runtime
+    C->>S: akamai_papi_listProperties
+    S->>E: Execute operation
+    E->>E: Validate params
+    E->>E: Build request
+    alt Pagination Enabled
+        loop For each page
+            E->>A: GET /papi/v1/properties
+            A-->>E: Response (page N)
+        end
+        E->>E: Combine results
+    else Single Request
+        E->>A: GET /papi/v1/properties
+        A-->>E: Response
+    end
+    E-->>S: Format result
+    S-->>C: Return data
+```
 
 ## Prerequisites
 
@@ -71,14 +150,11 @@ akamai-mcp-server/
 
 ## Installation
 
-### 1. Clone or Create the Project
+### 1. Clone the Repository
 
 ```bash
-# Create a new directory
-mkdir akamai-mcp-server
+git clone https://github.com/schwarztim/akamai-mcp-server.git
 cd akamai-mcp-server
-
-# Copy all source files to this directory
 ```
 
 ### 2. Install Dependencies
@@ -87,11 +163,27 @@ cd akamai-mcp-server
 npm install
 ```
 
-### 3. Build the Project
+### 3. Sync OpenAPI Specifications
+
+```bash
+npm run sync:specs
+```
+
+This downloads all Akamai OpenAPI specifications and makes them available for tool generation.
+
+### 4. Build the Project
 
 ```bash
 npm run build
 ```
+
+### 5. Validate Registry (Optional)
+
+```bash
+npm run validate
+```
+
+This verifies that all operations loaded correctly and shows coverage statistics.
 
 ## Configuration
 

@@ -19,7 +19,7 @@ const configSchema = z.object({
   }),
   retry: z.object({
     maxRetries: z.number().min(0).max(10).default(3),
-    delayMs: z.number().min(100).max(10000).default(1000),
+    retryDelayMs: z.number().min(100).max(10000).default(1000),
   }),
   timeout: z.number().min(1000).max(300000).default(30000),
 });
@@ -45,7 +45,7 @@ export function loadConfig(): Config {
       },
       retry: {
         maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
-        delayMs: parseInt(process.env.RETRY_DELAY_MS || '1000', 10),
+        retryDelayMs: parseInt(process.env.RETRY_DELAY_MS || '1000', 10),
       },
       timeout: parseInt(process.env.REQUEST_TIMEOUT || '30000', 10),
     };
@@ -70,4 +70,11 @@ export function getConfig(): Config {
     configInstance = loadConfig();
   }
   return configInstance;
+}
+
+/**
+ * Reset configuration (for testing)
+ */
+export function resetConfig(): void {
+  configInstance = null;
 }

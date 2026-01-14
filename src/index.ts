@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 
+/**
+ * Akamai MCP Server
+ *
+ * Model Context Protocol server with complete Akamai API coverage.
+ * Dynamically generates tools from OpenAPI specifications.
+ */
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -8,47 +15,13 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { getLogger } from './utils/logger.js';
 import { getConfig } from './utils/config.js';
-
-// Import tool definitions and handlers
+import { getOperationRegistry } from './registry/operation-registry.js';
+import { getToolGenerator, type GeneratedTool } from './generator/tool-generator.js';
 import {
-  propertyManagerTools,
-  listPropertiesHandler,
-  getPropertyHandler,
-  getPropertyRulesHandler,
-  listPropertyHostnamesHandler,
-  activatePropertyHandler,
-} from './tools/property-manager.js';
-
-import {
-  fastPurgeTools,
-  purgeByUrlHandler,
-  purgeByCacheTagHandler,
-  purgeByCpCodeHandler,
-  getPurgeStatusHandler,
-} from './tools/fast-purge.js';
-
-import {
-  edgeWorkersTools,
-  listEdgeWorkersHandler,
-  getEdgeWorkerHandler,
-  listEdgeWorkerVersionsHandler,
-  getEdgeWorkerActivationsHandler,
-  activateEdgeWorkerHandler,
-} from './tools/edgeworkers.js';
-
-import {
-  dnsTools,
-  listDnsZonesHandler,
-  getDnsZoneHandler,
-  listDnsRecordsHandler,
-  getDnsRecordHandler,
-  createDnsRecordHandler,
-  updateDnsRecordHandler,
-  deleteDnsRecordHandler,
-} from './tools/dns.js';
-
-import { healthTools, healthCheckHandler } from './tools/health.js';
-import { ToolHandler } from './tools/types.js';
+  getRawRequestTool,
+  getListOperationsTool,
+  getRegistryStatsTool,
+} from './generator/raw-request-tool.js';
 
 /**
  * Main MCP server for Akamai APIs
@@ -56,16 +29,19 @@ import { ToolHandler } from './tools/types.js';
 class AkamaiMcpServer {
   private server: Server;
   private logger;
-  private toolHandlers: Map<string, ToolHandler>;
+  private tools: Map<string, GeneratedTool>;
+  private utilityTools: Map<string, { definition: any; handler: any }>;
 
   constructor() {
     this.logger = getLogger();
+    this.tools = new Map();
+    this.utilityTools = new Map();
 
     // Initialize MCP server
     this.server = new Server(
       {
         name: 'akamai-mcp-server',
-        version: '1.0.0',
+        version: '2.0.0', // Bumped to 2.0.0 for complete API coverage
       },
       {
         capabilities: {
@@ -74,38 +50,50 @@ class AkamaiMcpServer {
       }
     );
 
-    // Map tool names to handlers
-    this.toolHandlers = new Map([
-      // Property Manager
-      ['akamai_list_properties', listPropertiesHandler],
-      ['akamai_get_property', getPropertyHandler],
-      ['akamai_get_property_rules', getPropertyRulesHandler],
-      ['akamai_list_property_hostnames', listPropertyHostnamesHandler],
-      ['akamai_activate_property', activatePropertyHandler],
-      // Fast Purge
-      ['akamai_purge_by_url', purgeByUrlHandler],
-      ['akamai_purge_by_cache_tag', purgeByCacheTagHandler],
-      ['akamai_purge_by_cpcode', purgeByCpCodeHandler],
-      ['akamai_get_purge_status', getPurgeStatusHandler],
-      // EdgeWorkers
-      ['akamai_list_edgeworkers', listEdgeWorkersHandler],
-      ['akamai_get_edgeworker', getEdgeWorkerHandler],
-      ['akamai_list_edgeworker_versions', listEdgeWorkerVersionsHandler],
-      ['akamai_get_edgeworker_activations', getEdgeWorkerActivationsHandler],
-      ['akamai_activate_edgeworker', activateEdgeWorkerHandler],
-      // DNS Management
-      ['akamai_list_dns_zones', listDnsZonesHandler],
-      ['akamai_get_dns_zone', getDnsZoneHandler],
-      ['akamai_list_dns_records', listDnsRecordsHandler],
-      ['akamai_get_dns_record', getDnsRecordHandler],
-      ['akamai_create_dns_record', createDnsRecordHandler],
-      ['akamai_update_dns_record', updateDnsRecordHandler],
-      ['akamai_delete_dns_record', deleteDnsRecordHandler],
-      // Health
-      ['akamai_health_check', healthCheckHandler],
-    ]);
-
     this.setupHandlers();
+  }
+
+  /**
+   * Load all tools from the registry
+   */
+  private async loadTools(): Promise<void> {
+    this.logger.info('Loading operation registry...');
+
+    try {
+      // Load registry
+      const registry = await getOperationRegistry();
+      const stats = registry.getStats();
+
+      this.logger.info(
+        `Registry loaded: ${stats.totalOperations} operations from ${stats.specsLoaded} APIs`
+      );
+
+      // Generate tools
+      const generator = getToolGenerator();
+      const operations = registry.getAllOperations();
+      const generatedTools = await generator.generateAll(operations);
+
+      // Register tools
+      for (const tool of generatedTools) {
+        this.tools.set(tool.definition.name, tool);
+      }
+
+      this.logger.info(`Generated ${this.tools.size} MCP tools`);
+
+      // Add utility tools
+      this.utilityTools.set('akamai_raw_request', getRawRequestTool());
+      this.utilityTools.set('akamai_list_operations', getListOperationsTool());
+      this.utilityTools.set('akamai_registry_stats', getRegistryStatsTool());
+
+      this.logger.info(`Added ${this.utilityTools.size} utility tools`);
+
+      // Log coverage summary
+      this.logger.info('Coverage by product:', stats.operationsByProduct);
+      this.logger.info('Coverage by method:', stats.operationsByMethod);
+    } catch (error) {
+      this.logger.error('Failed to load tools', { error });
+      throw error;
+    }
   }
 
   /**
@@ -116,14 +104,15 @@ class AkamaiMcpServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       this.logger.info('Listing available tools');
 
+      const allTools = [
+        // Utility tools first
+        ...Array.from(this.utilityTools.values()).map(t => t.definition),
+        // Generated tools
+        ...Array.from(this.tools.values()).map(t => t.definition),
+      ];
+
       return {
-        tools: [
-          ...healthTools,
-          ...propertyManagerTools,
-          ...fastPurgeTools,
-          ...edgeWorkersTools,
-          ...dnsTools,
-        ],
+        tools: allTools,
       };
     });
 
@@ -134,16 +123,24 @@ class AkamaiMcpServer {
       this.logger.info(`Tool called: ${name}`, { args });
 
       try {
-        const handler = this.toolHandlers.get(name);
-
-        if (!handler) {
-          throw new Error(`Unknown tool: ${name}`);
+        // Check utility tools first
+        if (this.utilityTools.has(name)) {
+          const tool = this.utilityTools.get(name)!;
+          const result = await tool.handler(args || {});
+          this.logger.info(`Utility tool completed: ${name}`);
+          return result;
         }
 
-        const result = await handler(args || {});
-        this.logger.info(`Tool completed: ${name}`);
+        // Check generated tools
+        if (this.tools.has(name)) {
+          const tool = this.tools.get(name)!;
+          const result = await tool.handler(args || {});
+          this.logger.info(`Tool completed: ${name}`);
+          return result;
+        }
 
-        return result;
+        // Tool not found
+        throw new Error(`Unknown tool: ${name}`);
       } catch (error) {
         this.logger.error(`Tool error: ${name}`, { error });
 
@@ -184,17 +181,24 @@ class AkamaiMcpServer {
   async start(): Promise<void> {
     const transport = new StdioServerTransport();
 
-    this.logger.info('Starting Akamai MCP server...');
+    this.logger.info('Starting Akamai MCP Server v2.0.0...');
 
     try {
-      // Validate configuration on startup
+      // Validate configuration
       const config = getConfig();
       this.logger.info('Configuration validated successfully', {
         host: config.akamai.host.substring(0, 20) + '...',
       });
 
+      // Load tools
+      await this.loadTools();
+
+      // Connect to transport
       await this.server.connect(transport);
-      this.logger.info('Akamai MCP server started successfully');
+
+      this.logger.info('✅ Akamai MCP Server started successfully');
+      this.logger.info('🎯 Complete API coverage: All Akamai operations available');
+      this.logger.info(`📊 Total tools: ${this.tools.size + this.utilityTools.size}`);
     } catch (error) {
       this.logger.error('Failed to start server', { error });
       throw error;

@@ -1,22 +1,21 @@
 import { getEdgeGridClient } from '../auth/edgegrid-client.js';
 import { ToolDefinition, ToolHandler, formatSuccess, formatError } from './types.js';
+import { validateInput, fastPurgeSchemas } from '../utils/validation.js';
 
 /**
  * Purge content by URL
  */
 export const purgeByUrlHandler: ToolHandler = async (args) => {
   try {
+    const validated = validateInput(fastPurgeSchemas.purgeByUrl, args);
     const client = getEdgeGridClient();
-    const urls = args.urls as string[];
-    const network = (args.network as string) || 'production';
-    const action = (args.action as string) || 'remove';
 
     const body = {
-      objects: urls,
+      objects: validated.urls,
     };
 
     const response = await client.post(
-      `/ccu/v3/${action}/url/${network}`,
+      `/ccu/v3/${validated.action}/url/${validated.network}`,
       body
     );
 
@@ -31,17 +30,15 @@ export const purgeByUrlHandler: ToolHandler = async (args) => {
  */
 export const purgeByCacheTagHandler: ToolHandler = async (args) => {
   try {
+    const validated = validateInput(fastPurgeSchemas.purgeByCacheTag, args);
     const client = getEdgeGridClient();
-    const tags = args.tags as string[];
-    const network = (args.network as string) || 'production';
-    const action = (args.action as string) || 'remove';
 
     const body = {
-      objects: tags,
+      objects: validated.tags,
     };
 
     const response = await client.post(
-      `/ccu/v3/${action}/tag/${network}`,
+      `/ccu/v3/${validated.action}/tag/${validated.network}`,
       body
     );
 
@@ -56,17 +53,15 @@ export const purgeByCacheTagHandler: ToolHandler = async (args) => {
  */
 export const purgeByCpCodeHandler: ToolHandler = async (args) => {
   try {
+    const validated = validateInput(fastPurgeSchemas.purgeByCpCode, args);
     const client = getEdgeGridClient();
-    const cpCodes = args.cpCodes as number[];
-    const network = (args.network as string) || 'production';
-    const action = (args.action as string) || 'remove';
 
     const body = {
-      objects: cpCodes,
+      objects: validated.cpCodes,
     };
 
     const response = await client.post(
-      `/ccu/v3/${action}/cpcode/${network}`,
+      `/ccu/v3/${validated.action}/cpcode/${validated.network}`,
       body
     );
 
@@ -81,10 +76,10 @@ export const purgeByCpCodeHandler: ToolHandler = async (args) => {
  */
 export const getPurgeStatusHandler: ToolHandler = async (args) => {
   try {
+    const validated = validateInput(fastPurgeSchemas.getPurgeStatus, args);
     const client = getEdgeGridClient();
-    const purgeId = args.purgeId as string;
 
-    const response = await client.get(`/ccu/v3/purges/${purgeId}`);
+    const response = await client.get(`/ccu/v3/purges/${validated.purgeId}`);
 
     return formatSuccess(response);
   } catch (error) {

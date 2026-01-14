@@ -9,7 +9,6 @@ import { withRetry, RateLimiter } from '../utils/retry.js';
 export class EdgeGridClient {
   private client: EdgeGrid;
   private rateLimiter: RateLimiter;
-  private readonly baseUrl: string;
 
   constructor() {
     const config = getConfig();
@@ -24,7 +23,6 @@ export class EdgeGridClient {
       debug: config.logging.level === 'debug',
     });
 
-    this.baseUrl = `https://${config.akamai.host}`;
     this.rateLimiter = new RateLimiter(20, 2); // 20 requests, refill 2/sec
 
     logger.info('EdgeGrid client initialized', {
@@ -83,7 +81,6 @@ export class EdgeGridClient {
     body?: unknown,
     params?: Record<string, string | number | boolean>
   ): Promise<T> {
-    const logger = getLogger();
     const config = getConfig();
 
     // Apply rate limiting
@@ -92,10 +89,12 @@ export class EdgeGridClient {
     // Build full path with query params
     let fullPath = path;
     if (params) {
-      const queryString = new URLSearchParams(
-        Object.entries(params).map(([k, v]) => [k, String(v)])
-      ).toString();
-      fullPath = `${path}${path.includes('?') ? '&' : '?'}${queryString}`;
+      const searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => searchParams.append(k, String(v)));
+      const queryString = searchParams.toString();
+      if (queryString) {
+        fullPath = `${path}${path.includes('?') ? '&' : '?'}${queryString}`;
+      }
     }
 
     logRequest(method, fullPath, body);
@@ -105,7 +104,7 @@ export class EdgeGridClient {
 
       try {
         const response = await new Promise<{ body: T; statusCode: number }>((resolve, reject) => {
-          const options = {
+          const options: any = {
             path: fullPath,
             method,
             body: body ? JSON.stringify(body) : undefined,
@@ -113,13 +112,13 @@ export class EdgeGridClient {
               ? {
                   'Content-Type': 'application/json',
                 }
-              : {},
+              : undefined,
           };
 
           this.client.auth(options);
 
           // Make request using the underlying HTTP client
-          const req = this.client.send((error, response, responseBody) => {
+          const req = this.client.send((error: any, response: any, responseBody: any) => {
             if (error) {
               reject(error);
               return;
@@ -152,8 +151,8 @@ export class EdgeGridClient {
 
         // Check for HTTP errors
         if (response.statusCode >= 400) {
-          const error = new Error(`HTTP ${response.statusCode}: ${JSON.stringify(response.body)}`);
-          (error as { response: { status: number; data: T } }).response = {
+          const error: any = new Error(`HTTP ${response.statusCode}: ${JSON.stringify(response.body)}`);
+          error.response = {
             status: response.statusCode,
             data: response.body,
           };

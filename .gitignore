@@ -39,3 +39,6 @@ temp/
 
 # Akamai credentials (be careful!)
 .edgerc
+
+# OpenAPI specs (synced via npm run sync:specs)
+specs/

@@ -16,7 +16,6 @@ import {
 import { getLogger } from './utils/logger.js';
 import { getConfig } from './utils/config.js';
 import { getOperationRegistry } from './registry/operation-registry.js';
-import { getToolGenerator, type GeneratedTool } from './generator/tool-generator.js';
 import {
   getRawRequestTool,
   getListOperationsTool,
@@ -29,7 +28,7 @@ import {
 class AkamaiMcpServer {
   private server: Server;
   private logger;
-  private tools: Map<string, GeneratedTool>;
+  private tools: Map<string, any>; // Only utility tools, API tools via akamai_raw_request
   private utilityTools: Map<string, { definition: any; handler: any }>;
 
   constructor() {
@@ -68,17 +67,10 @@ class AkamaiMcpServer {
         `Registry loaded: ${stats.totalOperations} operations from ${stats.specsLoaded} APIs`
       );
 
-      // Generate tools
-      const generator = getToolGenerator();
-      const operations = registry.getAllOperations();
-      const generatedTools = await generator.generateAll(operations);
-
-      // Register tools
-      for (const tool of generatedTools) {
-        this.tools.set(tool.definition.name, tool);
-      }
-
-      this.logger.info(`Generated ${this.tools.size} MCP tools`);
+      // Don't register individual API tools to avoid context bloat
+      // Instead, use the akamai_raw_request tool to execute operations
+      // Users can discover operations via akamai_list_operations
+      this.logger.info(`Registry ready: 1444 operations available via akamai_raw_request`);
 
       // Add utility tools
       this.utilityTools.set('akamai_raw_request', getRawRequestTool());

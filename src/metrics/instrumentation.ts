@@ -15,7 +15,6 @@ export function instrumentToolCall(
   method: string
 ): { recordSuccess: (duration: number) => void; recordError: (error: Error) => void } {
   const metrics = getMetricsCollector();
-  const startTime = Date.now();
 
   metrics.incrementCounter('akamai_mcp_tool_calls_total', {
     tool: toolName,

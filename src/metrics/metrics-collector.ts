@@ -199,9 +199,10 @@ export class MetricsCollector {
 
       if (metric.type === 'histogram' && metric.observations) {
         const sorted = metric.observations.slice().sort((a, b) => a - b);
+        const sum = sorted.reduce((acc, val) => acc + val, 0);
         metricData.count = sorted.length;
-        metricData.sum = sorted.reduce((acc, val) => acc + val, 0);
-        metricData.avg = metricData.sum / sorted.length || 0;
+        metricData.sum = sum;
+        metricData.avg = sum / sorted.length || 0;
         metricData.min = sorted[0] || 0;
         metricData.max = sorted[sorted.length - 1] || 0;
         metricData.p50 = this.percentile(sorted, 0.5);

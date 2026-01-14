@@ -273,6 +273,23 @@ The server will validate your configuration on startup and log any issues.
 
 ## Usage
 
+### Quick Start
+
+1. **Build and test the server**:
+   ```bash
+   npm run e2e
+   ```
+   This runs all validation tests and confirms your setup is working correctly.
+
+2. **Start the server**:
+   ```bash
+   npm start
+   ```
+
+3. **Use tools in Claude**: All `akamai_*` tools are now available.
+
+4. **For detailed usage instructions**: See [USAGE_GUIDE.md](USAGE_GUIDE.md)
+
 ### Running the Server
 
 #### Development Mode
@@ -286,6 +303,34 @@ npm run dev
 ```bash
 npm run build
 npm start
+```
+
+### Testing & Validation
+
+**End-to-End Test** (recommended after setup):
+```bash
+npm run e2e
+```
+This validates:
+- Environment variables are configured
+- EdgeGrid client initializes correctly
+- Registry loads all 1,444 operations
+- Tools generate successfully
+- Compiled files exist
+
+**Interactive CLI** (test tools locally):
+```bash
+npm run cli
+```
+
+**Validate Registry**:
+```bash
+npm run validate
+```
+
+**Health Check**:
+```bash
+npm run health
 ```
 
 ### Integrating with MCP Clients

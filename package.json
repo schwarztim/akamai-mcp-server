@@ -25,7 +25,8 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "prepare": "husky install || true",
     "prebuild": "npm run sync:specs",
-    "health": "node dist/cli/health-check.js"
+    "health": "node dist/cli/health-check.js",
+    "e2e": "npm run build && node test-e2e.js"
   },
   "keywords": [
     "akamai",

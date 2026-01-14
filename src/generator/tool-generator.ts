@@ -255,36 +255,17 @@ export class ToolGenerator {
   }
 
   /**
-   * Build tool description
+   * Build tool description (minimal to avoid bloating context)
    */
   private buildDescription(operation: OperationDefinition): string {
-    let desc = '';
+    // Keep descriptions minimal - just summary
+    // Detailed info in tool name format: akamai_product_operation
+    let desc = operation.summary || `${operation.method} ${operation.path}`;
 
-    if (operation.summary) {
-      desc += operation.summary;
-    }
-
-    if (operation.description) {
-      if (desc) desc += '\n\n';
-      desc += operation.description;
-    }
-
-    // Add metadata
-    const metadata = [
-      `\n\nMethod: ${operation.method}`,
-      `Path: ${operation.path}`,
-      `Product: ${operation.product} (${operation.version})`,
-    ];
-
-    if (operation.tags.length > 0) {
-      metadata.push(`Tags: ${operation.tags.join(', ')}`);
-    }
-
+    // Add pagination note if applicable
     if (operation.supportsPagination) {
-      metadata.push('Supports pagination: Set paginate=true to fetch all results automatically');
+      desc += ' [supports pagination: use paginate=true]';
     }
-
-    desc += metadata.join('\n');
 
     return desc.trim();
   }

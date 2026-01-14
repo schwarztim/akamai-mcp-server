@@ -1,7 +1,7 @@
 {
   "name": "akamai-mcp-server",
-  "version": "2.0.0",
-  "description": "Model Context Protocol server with complete Akamai API coverage via dynamic OpenAPI tool generation",
+  "version": "3.0.0",
+  "description": "Enterprise-grade Model Context Protocol server with complete Akamai API coverage via dynamic OpenAPI tool generation",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -36,7 +36,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
-    "edgegrid": "^3.0.8",
+    "akamai-edgegrid": "^4.0.0",
     "axios": "^1.7.9",
     "winston": "^3.17.0",
     "dotenv": "^16.4.7",

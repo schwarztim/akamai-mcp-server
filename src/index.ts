@@ -41,7 +41,7 @@ class AkamaiMcpServer {
     this.server = new Server(
       {
         name: 'akamai-mcp-server',
-        version: '2.0.0', // Bumped to 2.0.0 for complete API coverage
+        version: '3.0.0', // v3.0 - Enterprise-grade reliability
       },
       {
         capabilities: {
@@ -181,7 +181,7 @@ class AkamaiMcpServer {
   async start(): Promise<void> {
     const transport = new StdioServerTransport();
 
-    this.logger.info('Starting Akamai MCP Server v2.0.0...');
+    this.logger.info('Starting Akamai MCP Server v3.0.0...');
 
     try {
       // Validate configuration

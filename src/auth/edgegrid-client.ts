@@ -1,4 +1,4 @@
-import EdgeGrid from 'edgegrid';
+import EdgeGrid from 'akamai-edgegrid';
 import { getConfig } from '../utils/config.js';
 import { getLogger, logRequest, logResponse, logError } from '../utils/logger.js';
 import { withRetry, RateLimiter } from '../utils/retry.js';
@@ -14,14 +14,13 @@ export class EdgeGridClient {
     const config = getConfig();
     const logger = getLogger();
 
-    // Initialize EdgeGrid client
-    this.client = new EdgeGrid({
-      path: config.akamai.host,
-      clientToken: config.akamai.clientToken,
-      clientSecret: config.akamai.clientSecret,
-      accessToken: config.akamai.accessToken,
-      debug: config.logging.level === 'debug',
-    });
+    // Initialize EdgeGrid client with new akamai-edgegrid API
+    this.client = new EdgeGrid(
+      config.akamai.clientToken,
+      config.akamai.clientSecret,
+      config.akamai.accessToken,
+      config.akamai.host
+    );
 
     this.rateLimiter = new RateLimiter(20, 2); // 20 requests, refill 2/sec
 
@@ -81,23 +80,10 @@ export class EdgeGridClient {
     body?: unknown,
     params?: Record<string, string | number | boolean>
   ): Promise<T> {
-    const config = getConfig();
-
     // Apply rate limiting
     await this.rateLimiter.acquire();
 
-    // Build full path with query params
-    let fullPath = path;
-    if (params) {
-      const searchParams = new URLSearchParams();
-      Object.entries(params).forEach(([k, v]) => searchParams.append(k, String(v)));
-      const queryString = searchParams.toString();
-      if (queryString) {
-        fullPath = `${path}${path.includes('?') ? '&' : '?'}${queryString}`;
-      }
-    }
-
-    logRequest(method, fullPath, body);
+    logRequest(method, path, body);
 
     return withRetry(async () => {
       const startTime = Date.now();
@@ -105,7 +91,7 @@ export class EdgeGridClient {
       try {
         const response = await new Promise<{ body: T; statusCode: number }>((resolve, reject) => {
           const options: any = {
-            path: fullPath,
+            path,  // Use original path without query string
             method,
             body: body ? JSON.stringify(body) : undefined,
             headers: body
@@ -115,10 +101,13 @@ export class EdgeGridClient {
               : undefined,
           };
 
-          this.client.auth(options);
+          // Add query parameters using qs property
+          if (params && Object.keys(params).length > 0) {
+            options.qs = params;
+          }
 
-          // Make request using the underlying HTTP client
-          const req = this.client.send((error: any, response: any, responseBody: any) => {
+          // Chain auth() and send()
+          this.client.auth(options).send((error: any, response: any, responseBody: any) => {
             if (error) {
               reject(error);
               return;
@@ -138,16 +127,10 @@ export class EdgeGridClient {
               });
             }
           });
-
-          // Set timeout
-          req.setTimeout(config.timeout, () => {
-            req.abort();
-            reject(new Error(`Request timeout after ${config.timeout}ms`));
-          });
         });
 
         const duration = Date.now() - startTime;
-        logResponse(method, fullPath, response.statusCode, duration);
+        logResponse(method, path, response.statusCode, duration);
 
         // Check for HTTP errors
         if (response.statusCode >= 400) {
@@ -163,12 +146,12 @@ export class EdgeGridClient {
       } catch (error) {
         logError(error as Error, {
           method,
-          path: fullPath,
+          path,
           body,
         });
         throw error;
       }
-    }, `${method} ${fullPath}`);
+    }, `${method} ${path}`);
   }
 
   /**

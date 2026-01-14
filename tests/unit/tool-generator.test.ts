@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolGenerator } from '../../src/generator/tool-generator.js';
-import type { OperationDefinition } from '../../src/registry/types.js';
+import { createMockOperation, createMockParameter } from '../helpers/mock-operations.js';
 
 describe('Tool Generator', () => {
   let generator: ToolGenerator;
@@ -20,35 +20,30 @@ describe('Tool Generator', () => {
 
   describe('Generate Tool', () => {
     it('should generate a tool from operation definition', async () => {
-      const mockOperation: OperationDefinition = {
+      const mockOperation = createMockOperation({
         toolName: 'akamai_papi_listProperties',
         operationId: 'listProperties',
         method: 'GET',
         path: '/papi/v1/properties',
         summary: 'List all properties',
-        description: 'Returns a list of properties in the specified group',
         product: 'papi',
         version: 'v1',
-        tags: ['Property'],
-        parameters: [
-          {
+        queryParameters: [
+          createMockParameter({
             name: 'contractId',
             in: 'query',
             required: true,
-            schema: { type: 'string' },
             description: 'Contract identifier',
-          },
-          {
+          }),
+          createMockParameter({
             name: 'groupId',
             in: 'query',
             required: true,
-            schema: { type: 'string' },
             description: 'Group identifier',
-          },
+          }),
         ],
-        paginatable: true,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+        supportsPagination: true,
+      });
 
       const tool = await generator.generate(mockOperation);
 
@@ -60,18 +55,9 @@ describe('Tool Generator', () => {
     });
 
     it('should include pagination options for paginatable operations', async () => {
-      const mockOperation: OperationDefinition = {
-        toolName: 'akamai_papi_listProperties',
-        operationId: 'listProperties',
-        method: 'GET',
-        path: '/papi/v1/properties',
-        summary: 'List properties',
-        product: 'papi',
-        version: 'v1',
-        parameters: [],
-        paginatable: true,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+      const mockOperation = createMockOperation({
+        supportsPagination: true,
+      });
 
       const tool = await generator.generate(mockOperation);
 
@@ -81,18 +67,9 @@ describe('Tool Generator', () => {
     });
 
     it('should not include pagination options for non-paginatable operations', async () => {
-      const mockOperation: OperationDefinition = {
-        toolName: 'akamai_papi_getProperty',
-        operationId: 'getProperty',
-        method: 'GET',
-        path: '/papi/v1/properties/{propertyId}',
-        summary: 'Get property details',
-        product: 'papi',
-        version: 'v1',
-        parameters: [],
-        paginatable: false,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+      const mockOperation = createMockOperation({
+        supportsPagination: false,
+      });
 
       const tool = await generator.generate(mockOperation);
 
@@ -101,26 +78,17 @@ describe('Tool Generator', () => {
     });
 
     it('should handle operations with path parameters', async () => {
-      const mockOperation: OperationDefinition = {
-        toolName: 'akamai_papi_getProperty',
-        operationId: 'getProperty',
-        method: 'GET',
+      const mockOperation = createMockOperation({
         path: '/papi/v1/properties/{propertyId}',
-        summary: 'Get property',
-        product: 'papi',
-        version: 'v1',
-        parameters: [
-          {
+        pathParameters: [
+          createMockParameter({
             name: 'propertyId',
             in: 'path',
             required: true,
-            schema: { type: 'string' },
             description: 'Property ID',
-          },
+          }),
         ],
-        paginatable: false,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+      });
 
       const tool = await generator.generate(mockOperation);
 
@@ -129,15 +97,8 @@ describe('Tool Generator', () => {
     });
 
     it('should handle operations with request body', async () => {
-      const mockOperation: OperationDefinition = {
-        toolName: 'akamai_papi_createProperty',
-        operationId: 'createProperty',
+      const mockOperation = createMockOperation({
         method: 'POST',
-        path: '/papi/v1/properties',
-        summary: 'Create property',
-        product: 'papi',
-        version: 'v1',
-        parameters: [],
         requestBody: {
           required: true,
           content: {
@@ -153,9 +114,7 @@ describe('Tool Generator', () => {
             },
           },
         },
-        paginatable: false,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+      });
 
       const tool = await generator.generate(mockOperation);
 
@@ -165,31 +124,20 @@ describe('Tool Generator', () => {
 
   describe('Generate All', () => {
     it('should generate tools for multiple operations', async () => {
-      const operations: OperationDefinition[] = [
-        {
+      const operations = [
+        createMockOperation({
           toolName: 'akamai_papi_listProperties',
           operationId: 'listProperties',
-          method: 'GET',
-          path: '/papi/v1/properties',
-          summary: 'List properties',
           product: 'papi',
-          version: 'v1',
-          parameters: [],
-          paginatable: true,
-          servers: ['https://akab-xxx.luna.akamaiapis.net'],
-        },
-        {
+          supportsPagination: true,
+        }),
+        createMockOperation({
           toolName: 'akamai_ccu_purgeByUrl',
           operationId: 'purgeByUrl',
           method: 'POST',
-          path: '/ccu/v3/delete/url',
-          summary: 'Purge by URL',
           product: 'ccu',
-          version: 'v3',
-          parameters: [],
-          paginatable: false,
-          servers: ['https://akab-xxx.luna.akamaiapis.net'],
-        },
+          supportsPagination: false,
+        }),
       ];
 
       const tools = await generator.generateAll(operations);
@@ -207,31 +155,18 @@ describe('Tool Generator', () => {
 
   describe('Input Schema Generation', () => {
     it('should mark required parameters', async () => {
-      const mockOperation: OperationDefinition = {
-        toolName: 'akamai_test_operation',
-        operationId: 'testOp',
-        method: 'GET',
-        path: '/test',
-        summary: 'Test operation',
-        product: 'test',
-        version: 'v1',
-        parameters: [
-          {
+      const mockOperation = createMockOperation({
+        queryParameters: [
+          createMockParameter({
             name: 'requiredParam',
-            in: 'query',
             required: true,
-            schema: { type: 'string' },
-          },
-          {
+          }),
+          createMockParameter({
             name: 'optionalParam',
-            in: 'query',
             required: false,
-            schema: { type: 'string' },
-          },
+          }),
         ],
-        paginatable: false,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+      });
 
       const tool = await generator.generate(mockOperation);
 
@@ -240,37 +175,28 @@ describe('Tool Generator', () => {
     });
 
     it('should handle different parameter types', async () => {
-      const mockOperation: OperationDefinition = {
-        toolName: 'akamai_test_operation',
-        operationId: 'testOp',
-        method: 'GET',
+      const mockOperation = createMockOperation({
         path: '/test/{id}',
-        summary: 'Test operation',
-        product: 'test',
-        version: 'v1',
-        parameters: [
-          {
+        pathParameters: [
+          createMockParameter({
             name: 'id',
             in: 'path',
             required: true,
-            schema: { type: 'string' },
-          },
-          {
+          }),
+        ],
+        queryParameters: [
+          createMockParameter({
             name: 'filter',
             in: 'query',
-            required: false,
-            schema: { type: 'string' },
-          },
-          {
+          }),
+        ],
+        headerParameters: [
+          createMockParameter({
             name: 'x-request-id',
             in: 'header',
-            required: false,
-            schema: { type: 'string' },
-          },
+          }),
         ],
-        paginatable: false,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+      });
 
       const tool = await generator.generate(mockOperation);
 
@@ -282,18 +208,10 @@ describe('Tool Generator', () => {
 
   describe('Tool Description Generation', () => {
     it('should include method and path in description', async () => {
-      const mockOperation: OperationDefinition = {
-        toolName: 'akamai_test_operation',
-        operationId: 'testOp',
+      const mockOperation = createMockOperation({
         method: 'POST',
         path: '/test/endpoint',
-        summary: 'Test operation',
-        product: 'test',
-        version: 'v1',
-        parameters: [],
-        paginatable: false,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+      });
 
       const tool = await generator.generate(mockOperation);
 
@@ -302,18 +220,10 @@ describe('Tool Generator', () => {
     });
 
     it('should include product and version in description', async () => {
-      const mockOperation: OperationDefinition = {
-        toolName: 'akamai_papi_listProperties',
-        operationId: 'listProperties',
-        method: 'GET',
-        path: '/papi/v1/properties',
-        summary: 'List properties',
+      const mockOperation = createMockOperation({
         product: 'papi',
         version: 'v1',
-        parameters: [],
-        paginatable: false,
-        servers: ['https://akab-xxx.luna.akamaiapis.net'],
-      };
+      });
 
       const tool = await generator.generate(mockOperation);
 

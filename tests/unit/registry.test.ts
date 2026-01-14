@@ -87,18 +87,21 @@ describe('Operation Registry', () => {
   });
 
   describe('Get Operation', () => {
-    it('should return null for non-existent operation', () => {
+    it('should return undefined for non-existent operation', () => {
       const op = registry.getOperation('nonexistent_tool');
-      expect(op).toBeNull();
+      expect(op).toBeUndefined();
     });
 
     it('should return operation definition if exists', () => {
       // This test would work with actual loaded operations
       const op = registry.getOperation('some_valid_tool');
-      if (op !== null) {
+      if (op) {
         expect(op).toHaveProperty('toolName');
         expect(op).toHaveProperty('method');
         expect(op).toHaveProperty('path');
+      } else {
+        // No operations loaded in this test, so undefined is expected
+        expect(op).toBeUndefined();
       }
     });
   });

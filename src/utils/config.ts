@@ -1,5 +1,10 @@
 import { config } from 'dotenv';
 import { z } from 'zod';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = dirname(dirname(__dirname));
 
 // Load environment variables
 config();
@@ -15,7 +20,7 @@ const configSchema = z.object({
   }),
   logging: z.object({
     level: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
-    file: z.string().default('logs/akamai-mcp.log'),
+    file: z.string(),
   }),
   retry: z.object({
     maxRetries: z.number().min(0).max(10).default(3),
@@ -41,7 +46,7 @@ export function loadConfig(): Config {
       },
       logging: {
         level: (process.env.LOG_LEVEL || 'info') as 'error' | 'warn' | 'info' | 'debug',
-        file: process.env.LOG_FILE || 'logs/akamai-mcp.log',
+        file: process.env.LOG_FILE || `${PROJECT_ROOT}/logs/akamai-mcp.log`,
       },
       retry: {
         maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),

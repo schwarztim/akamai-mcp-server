@@ -98,7 +98,7 @@ export class EdgeGridClient {
               ? {
                   'Content-Type': 'application/json',
                 }
-              : undefined,
+              : {},  // Empty object instead of undefined
           };
 
           // Add query parameters using qs property

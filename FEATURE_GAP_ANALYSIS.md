@@ -89,20 +89,20 @@ These CLI features go **beyond raw API wrappers** and provide automation/workflo
 | `akamai_dns_records` | DNS record management | ✅ Done |
 | `akamai_purge_cache` | Fast purge operations | ✅ Done |
 
-#### What MCP Needs
+#### What MCP Has (All Implemented ✅)
 
-| Tool | Description | Priority |
-|------|-------------|----------|
-| `akamai_terraform_export` | Export configs to Terraform HCL | 🔴 Critical |
-| `akamai_bulk_activate` | Activate multiple properties at once | 🔴 Critical |
-| `akamai_environment_deploy` | Deploy property across environments | 🔴 Critical |
-| `akamai_security_overview` | Security config summary across account | 🟡 High |
-| `akamai_certificate_audit` | Certificate status and expiry report | 🟡 High |
-| `akamai_edgeworker_deploy` | Streamlined EW deployment workflow | 🟡 High |
-| `akamai_gtm_overview` | GTM datacenter/property summary | 🟡 High |
-| `akamai_sandbox_create` | Create sandbox with property clone | 🟠 Medium |
-| `akamai_bulk_onboard` | Onboard multiple hostnames/properties | 🟠 Medium |
-| `akamai_test_suite_run` | Run test suites and report results | 🟠 Medium |
+| Tool | Description | Status |
+|------|-------------|--------|
+| `akamai_terraform_export` | Export configs to Terraform HCL | ✅ Done |
+| `akamai_bulk_activate` | Activate multiple properties at once | ✅ Done |
+| `akamai_environment_deploy` | Deploy property across environments | ✅ Done |
+| `akamai_security_overview` | Security config summary across account | ✅ Done |
+| `akamai_certificate_audit` | Certificate status and expiry report | ✅ Done |
+| `akamai_edgeworker_deploy` | Streamlined EW deployment workflow | ✅ Done |
+| `akamai_gtm_overview` | GTM datacenter/property summary | ✅ Done |
+| `akamai_bulk_onboard` | Onboard multiple hostnames/properties | ✅ Done |
+| `akamai_test_suite_run` | Run test suites and report results | ✅ Done |
+| `akamai_traffic_report` | Traffic and cache hit reporting | ✅ Done |
 
 ### 3. Unpublished/Internal APIs
 

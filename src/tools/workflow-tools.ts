@@ -1124,6 +1124,853 @@ Example: "Show me certificates expiring in the next 30 days"`,
 }
 
 /**
+ * Bulk Onboarding Tool
+ *
+ * Create multiple properties from a configuration list.
+ */
+export function getBulkOnboardingTool(): { definition: MCPToolDefinition; handler: ToolHandler } {
+  const definition: MCPToolDefinition = {
+    name: 'akamai_bulk_onboard',
+    description: `Onboard multiple hostnames/properties in a single operation.
+
+Accepts a list of hostname configurations and creates:
+- Edge hostnames
+- Properties with basic CDN rules
+- Optional: Attaches to security configuration
+
+Example: "Onboard www.example.com and api.example.com to Akamai"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hostnames: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              hostname: { type: 'string', description: 'Customer-facing hostname (e.g., www.example.com)' },
+              origin: { type: 'string', description: 'Origin server hostname' },
+              originPort: { type: 'number', description: 'Origin port (default: 443)', default: 443 },
+              forwardHostHeader: { type: 'string', enum: ['REQUEST_HOST_HEADER', 'ORIGIN_HOSTNAME'], default: 'REQUEST_HOST_HEADER' },
+            },
+            required: ['hostname', 'origin'],
+          },
+          description: 'List of hostname configurations to onboard',
+        },
+        contractId: {
+          type: 'string',
+          description: 'Contract ID for the new properties',
+        },
+        groupId: {
+          type: 'string',
+          description: 'Group ID for the new properties',
+        },
+        productId: {
+          type: 'string',
+          description: 'Product ID (default: prd_SPM for Ion)',
+          default: 'prd_SPM',
+        },
+        edgeHostnameSuffix: {
+          type: 'string',
+          description: 'Edge hostname suffix (default: edgesuite.net)',
+          default: 'edgesuite.net',
+        },
+        secureNetwork: {
+          type: 'string',
+          enum: ['STANDARD_TLS', 'ENHANCED_TLS', 'SHARED_CERT'],
+          description: 'SSL/TLS type (default: ENHANCED_TLS)',
+          default: 'ENHANCED_TLS',
+        },
+        activateStaging: {
+          type: 'boolean',
+          description: 'Automatically activate to staging (default: false)',
+          default: false,
+        },
+      },
+      required: ['hostnames', 'contractId', 'groupId'],
+      additionalProperties: false,
+    },
+  };
+
+  const handler: ToolHandler = async (args: Record<string, unknown>) => {
+    const logger = getLogger();
+    const startTime = Date.now();
+
+    try {
+      const hostnames = args.hostnames as Array<{
+        hostname: string;
+        origin: string;
+        originPort?: number;
+        forwardHostHeader?: string;
+      }>;
+      const contractId = args.contractId as string;
+      const groupId = args.groupId as string;
+      const productId = (args.productId as string) || 'prd_SPM';
+      const edgeHostnameSuffix = (args.edgeHostnameSuffix as string) || 'edgesuite.net';
+      const secureNetwork = (args.secureNetwork as string) || 'ENHANCED_TLS';
+      const activateStaging = args.activateStaging as boolean;
+
+      logger.info(`Bulk onboarding ${hostnames.length} hostnames`);
+
+      const results: any[] = [];
+
+      for (const config of hostnames) {
+        try {
+          const propertyName = config.hostname.replace(/\./g, '-');
+          const edgeHostname = `${propertyName}.${edgeHostnameSuffix}`;
+
+          // Step 1: Create edge hostname
+          logger.info(`Creating edge hostname: ${edgeHostname}`);
+
+          try {
+            await executeOperation(
+              'akamai_papi_post-edgehostnames',
+              {},
+              { contractId, groupId },
+              {
+                productId,
+                domainPrefix: propertyName,
+                domainSuffix: edgeHostnameSuffix,
+                secureNetwork,
+                ipVersionBehavior: 'IPV6_COMPLIANCE',
+              }
+            );
+          } catch (e: any) {
+            // Edge hostname might already exist
+            if (!e.message?.includes('already exists')) {
+              throw e;
+            }
+            logger.info(`Edge hostname already exists: ${edgeHostname}`);
+          }
+
+          // Step 2: Create property
+          logger.info(`Creating property: ${propertyName}`);
+          const propertyResult = await executeOperation(
+            'akamai_papi_post-properties',
+            {},
+            { contractId, groupId },
+            {
+              productId,
+              propertyName,
+            }
+          );
+
+          const propertyId = propertyResult?.propertyLink?.split('/')?.pop()?.split('?')[0];
+          if (!propertyId) {
+            throw new Error('Failed to create property - no propertyId returned');
+          }
+
+          // Step 3: Add hostname to property
+          logger.info(`Adding hostname ${config.hostname} to property`);
+          await executeOperation(
+            'akamai_papi_put-property-version-hostnames',
+            { propertyId },
+            { contractId, groupId, propertyVersion: 1 },
+            {
+              add: [
+                {
+                  cnameFrom: config.hostname,
+                  cnameTo: edgeHostname,
+                  cnameType: 'EDGE_HOSTNAME',
+                },
+              ],
+            }
+          );
+
+          // Step 4: Set basic rules with origin
+          logger.info(`Configuring origin: ${config.origin}`);
+          const basicRules = {
+            rules: {
+              name: 'default',
+              behaviors: [
+                {
+                  name: 'origin',
+                  options: {
+                    originType: 'CUSTOMER',
+                    hostname: config.origin,
+                    httpPort: 80,
+                    httpsPort: config.originPort || 443,
+                    forwardHostHeader: config.forwardHostHeader || 'REQUEST_HOST_HEADER',
+                    cacheKeyHostname: 'ORIGIN_HOSTNAME',
+                  },
+                },
+                {
+                  name: 'cpCode',
+                  options: {
+                    value: {
+                      id: 0, // Will be auto-generated
+                      name: propertyName,
+                    },
+                  },
+                },
+              ],
+              children: [],
+            },
+          };
+
+          await executeOperation(
+            'akamai_papi_put-property-version-rules',
+            { propertyId },
+            { contractId, groupId, propertyVersion: 1 },
+            basicRules
+          );
+
+          // Step 5: Optionally activate to staging
+          let activationId: string | undefined;
+          if (activateStaging) {
+            logger.info(`Activating ${propertyName} to staging`);
+            const activationResult = await executeOperation(
+              'akamai_papi_post-property-activations',
+              { propertyId },
+              { contractId, groupId },
+              {
+                propertyVersion: 1,
+                network: 'STAGING',
+                note: 'Bulk onboarding activation',
+                notifyEmails: [],
+              }
+            );
+            activationId = activationResult?.activations?.items?.[0]?.activationId;
+          }
+
+          results.push({
+            hostname: config.hostname,
+            status: 'SUCCESS',
+            propertyId,
+            propertyName,
+            edgeHostname,
+            activationId,
+          });
+        } catch (e: any) {
+          logger.error(`Failed to onboard ${config.hostname}`, { error: e.message });
+          results.push({
+            hostname: config.hostname,
+            status: 'FAILED',
+            error: e.message,
+          });
+        }
+      }
+
+      const summary = {
+        total: results.length,
+        success: results.filter((r) => r.status === 'SUCCESS').length,
+        failed: results.filter((r) => r.status === 'FAILED').length,
+        fetchTime: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+      };
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ summary, results }, null, 2),
+          },
+        ],
+      };
+    } catch (error: any) {
+      logger.error('Failed bulk onboarding', { error });
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ error: true, message: error.message }, null, 2) },
+        ],
+      };
+    }
+  };
+
+  return { definition, handler };
+}
+
+/**
+ * Environment Deployment Tool
+ *
+ * Deploy property configurations across environments with variable substitution.
+ */
+export function getEnvironmentDeployTool(): { definition: MCPToolDefinition; handler: ToolHandler } {
+  const definition: MCPToolDefinition = {
+    name: 'akamai_environment_deploy',
+    description: `Deploy a property configuration to a different environment with variable substitution.
+
+Supports:
+- Cloning property rules from source to target
+- Variable substitution for environment-specific values
+- Origin, hostname, and CP code remapping
+- Automatic version creation and activation
+
+Example: "Deploy property from staging to production with production origins"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sourcePropertyId: {
+          type: 'string',
+          description: 'Source property ID to clone from',
+        },
+        sourceVersion: {
+          type: 'number',
+          description: 'Source property version (defaults to latest)',
+        },
+        targetPropertyId: {
+          type: 'string',
+          description: 'Target property ID to deploy to (creates new version)',
+        },
+        variables: {
+          type: 'object',
+          description: 'Variable substitutions as key-value pairs',
+          additionalProperties: { type: 'string' },
+        },
+        originMapping: {
+          type: 'object',
+          description: 'Origin hostname mappings (source -> target)',
+          additionalProperties: { type: 'string' },
+        },
+        targetNetwork: {
+          type: 'string',
+          enum: ['STAGING', 'PRODUCTION'],
+          description: 'Network to activate on after deployment',
+        },
+        note: {
+          type: 'string',
+          description: 'Deployment note/comment',
+        },
+      },
+      required: ['sourcePropertyId', 'targetPropertyId'],
+      additionalProperties: false,
+    },
+  };
+
+  const handler: ToolHandler = async (args: Record<string, unknown>) => {
+    const logger = getLogger();
+    const startTime = Date.now();
+
+    try {
+      const sourcePropertyId = args.sourcePropertyId as string;
+      const sourceVersion = args.sourceVersion as number;
+      const targetPropertyId = args.targetPropertyId as string;
+      const variables = (args.variables as Record<string, string>) || {};
+      const originMapping = (args.originMapping as Record<string, string>) || {};
+      const targetNetwork = args.targetNetwork as string;
+      const note = (args.note as string) || 'Environment deployment via Akamai MCP';
+
+      logger.info(`Deploying from ${sourcePropertyId} to ${targetPropertyId}`);
+
+      // Get source property context
+      const contractsData = await executeOperation('akamai_papi_get-contracts');
+      const groupsData = await executeOperation('akamai_papi_get-groups');
+      const contracts = contractsData?.contracts?.items || [];
+      const groups = groupsData?.groups?.items || [];
+
+      // Find source property
+      let sourceProperty: any = null;
+      let contractId = '';
+      let groupId = '';
+
+      for (const contract of contracts) {
+        for (const group of groups) {
+          try {
+            const propsData = await executeOperation('akamai_papi_get-properties', {}, {
+              contractId: contract.contractId,
+              groupId: group.groupId,
+            });
+            const prop = propsData?.properties?.items?.find(
+              (p: any) => p.propertyId === sourcePropertyId
+            );
+            if (prop) {
+              sourceProperty = prop;
+              contractId = contract.contractId;
+              groupId = group.groupId;
+              break;
+            }
+          } catch {
+            // Skip
+          }
+        }
+        if (sourceProperty) break;
+      }
+
+      if (!sourceProperty) {
+        throw new Error(`Source property not found: ${sourcePropertyId}`);
+      }
+
+      // Get source rules
+      const version = sourceVersion || sourceProperty.latestVersion || 1;
+      const rulesData = await executeOperation(
+        'akamai_papi_get-property-version-rules',
+        { propertyId: sourcePropertyId },
+        { contractId, groupId, propertyVersion: version }
+      );
+
+      // Apply transformations
+      let rulesJson = JSON.stringify(rulesData.rules);
+
+      // Variable substitution (${VAR_NAME} pattern)
+      for (const [key, value] of Object.entries(variables)) {
+        const pattern = new RegExp(`\\$\\{${key}\\}`, 'g');
+        rulesJson = rulesJson.replace(pattern, value);
+      }
+
+      // Origin mapping
+      for (const [source, target] of Object.entries(originMapping)) {
+        rulesJson = rulesJson.replace(new RegExp(source, 'g'), target);
+      }
+
+      const transformedRules = JSON.parse(rulesJson);
+
+      // Find target property
+      let targetProperty: any = null;
+      let targetContractId = '';
+      let targetGroupId = '';
+
+      for (const contract of contracts) {
+        for (const group of groups) {
+          try {
+            const propsData = await executeOperation('akamai_papi_get-properties', {}, {
+              contractId: contract.contractId,
+              groupId: group.groupId,
+            });
+            const prop = propsData?.properties?.items?.find(
+              (p: any) => p.propertyId === targetPropertyId
+            );
+            if (prop) {
+              targetProperty = prop;
+              targetContractId = contract.contractId;
+              targetGroupId = group.groupId;
+              break;
+            }
+          } catch {
+            // Skip
+          }
+        }
+        if (targetProperty) break;
+      }
+
+      if (!targetProperty) {
+        throw new Error(`Target property not found: ${targetPropertyId}`);
+      }
+
+      // Create new version on target
+      const newVersionResult = await executeOperation(
+        'akamai_papi_post-property-versions',
+        { propertyId: targetPropertyId },
+        { contractId: targetContractId, groupId: targetGroupId },
+        {
+          createFromVersion: targetProperty.latestVersion || 1,
+        }
+      );
+
+      const newVersion = newVersionResult?.versionLink?.match(/versions\/(\d+)/)?.[1] ||
+                         (targetProperty.latestVersion || 0) + 1;
+
+      // Update rules on new version
+      await executeOperation(
+        'akamai_papi_put-property-version-rules',
+        { propertyId: targetPropertyId },
+        { contractId: targetContractId, groupId: targetGroupId, propertyVersion: newVersion },
+        { rules: transformedRules }
+      );
+
+      // Optionally activate
+      let activationId: string | undefined;
+      if (targetNetwork) {
+        const activationResult = await executeOperation(
+          'akamai_papi_post-property-activations',
+          { propertyId: targetPropertyId },
+          { contractId: targetContractId, groupId: targetGroupId },
+          {
+            propertyVersion: newVersion,
+            network: targetNetwork,
+            note,
+            notifyEmails: [],
+          }
+        );
+        activationId = activationResult?.activations?.items?.[0]?.activationId;
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                source: {
+                  propertyId: sourcePropertyId,
+                  propertyName: sourceProperty.propertyName,
+                  version,
+                },
+                target: {
+                  propertyId: targetPropertyId,
+                  propertyName: targetProperty.propertyName,
+                  newVersion,
+                  activationId,
+                  network: targetNetwork,
+                },
+                transformations: {
+                  variablesApplied: Object.keys(variables).length,
+                  originsMapped: Object.keys(originMapping).length,
+                },
+                fetchTime: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error: any) {
+      logger.error('Failed environment deployment', { error });
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ error: true, message: error.message }, null, 2) },
+        ],
+      };
+    }
+  };
+
+  return { definition, handler };
+}
+
+/**
+ * Test Suite Runner Tool
+ *
+ * Execute Test Center test suites and report results.
+ */
+export function getTestSuiteRunnerTool(): { definition: MCPToolDefinition; handler: ToolHandler } {
+  const definition: MCPToolDefinition = {
+    name: 'akamai_test_suite_run',
+    description: `Execute a Test Center test suite and report results.
+
+Runs functional tests against your Akamai property configuration:
+- Execute test cases
+- Check pass/fail status
+- Get detailed results
+
+Example: "Run test suite 12345 and show me the results"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        testSuiteId: {
+          type: 'string',
+          description: 'Test suite ID to execute',
+        },
+        propertyId: {
+          type: 'string',
+          description: 'Property ID to test against (optional, uses suite default)',
+        },
+        propertyVersion: {
+          type: 'number',
+          description: 'Property version to test (optional)',
+        },
+        environment: {
+          type: 'string',
+          enum: ['STAGING', 'PRODUCTION'],
+          description: 'Environment to test (default: STAGING)',
+          default: 'STAGING',
+        },
+        waitForResults: {
+          type: 'boolean',
+          description: 'Wait for test execution to complete (default: true)',
+          default: true,
+        },
+        maxWaitSeconds: {
+          type: 'number',
+          description: 'Maximum seconds to wait for results (default: 300)',
+          default: 300,
+        },
+      },
+      required: ['testSuiteId'],
+      additionalProperties: false,
+    },
+  };
+
+  const handler: ToolHandler = async (args: Record<string, unknown>) => {
+    const logger = getLogger();
+    const startTime = Date.now();
+
+    try {
+      const testSuiteId = args.testSuiteId as string;
+      const propertyId = args.propertyId as string;
+      const propertyVersion = args.propertyVersion as number;
+      const environment = (args.environment as string) || 'STAGING';
+      const waitForResults = args.waitForResults !== false;
+      const maxWaitSeconds = (args.maxWaitSeconds as number) || 300;
+
+      logger.info(`Running test suite ${testSuiteId} on ${environment}`);
+
+      // Get test suite details
+      const suiteData = await executeOperation('akamai_test_management_get-test-suites-id', {
+        testSuiteId,
+      });
+
+      // Start test execution
+      const execBody: any = {
+        testSuiteExecutions: [
+          {
+            testSuiteId: parseInt(testSuiteId),
+          },
+        ],
+        environment,
+      };
+
+      if (propertyId) {
+        execBody.testSuiteExecutions[0].propertyId = propertyId;
+      }
+      if (propertyVersion) {
+        execBody.testSuiteExecutions[0].propertyVersion = propertyVersion;
+      }
+
+      const execResult = await executeOperation(
+        'akamai_test_management_post-functional-test-executions',
+        {},
+        {},
+        execBody
+      );
+
+      const executionId = execResult?.testSuiteExecutions?.[0]?.testSuiteExecutionId;
+
+      if (!executionId) {
+        throw new Error('Failed to start test execution - no executionId returned');
+      }
+
+      // Wait for results if requested
+      let results: any = null;
+      let status = 'PENDING';
+
+      if (waitForResults) {
+        const pollInterval = 5000; // 5 seconds
+        const maxPolls = Math.ceil((maxWaitSeconds * 1000) / pollInterval);
+        let polls = 0;
+
+        while (polls < maxPolls && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(status)) {
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          polls++;
+
+          try {
+            const statusResult = await executeOperation(
+              'akamai_test_management_get-test-suite-executions-id',
+              { testSuiteExecutionId: executionId }
+            );
+
+            status = statusResult?.status || 'UNKNOWN';
+            results = statusResult;
+
+            logger.info(`Test execution status: ${status} (poll ${polls}/${maxPolls})`);
+          } catch (e: any) {
+            logger.warn(`Failed to get execution status: ${e.message}`);
+          }
+        }
+      }
+
+      // Get test case results if completed
+      let testCaseResults: any[] = [];
+      if (status === 'COMPLETED' && results) {
+        try {
+          const casesResult = await executeOperation(
+            'akamai_test_management_get-test-suite-executions-id-test-case-executions',
+            { testSuiteExecutionId: executionId }
+          );
+          testCaseResults = casesResult?.testCaseExecutions || [];
+        } catch {
+          // Test case details might not be available
+        }
+      }
+
+      const summary = {
+        testSuiteName: suiteData?.name,
+        executionId,
+        status,
+        environment,
+        totalCases: testCaseResults.length,
+        passed: testCaseResults.filter((tc: any) => tc.status === 'PASSED').length,
+        failed: testCaseResults.filter((tc: any) => tc.status === 'FAILED').length,
+        fetchTime: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+      };
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                summary,
+                testCases: testCaseResults.map((tc: any) => ({
+                  name: tc.testCaseName,
+                  status: tc.status,
+                  conditionsPassed: tc.conditionsPassed,
+                  conditionsFailed: tc.conditionsFailed,
+                })),
+                note: status === 'COMPLETED'
+                  ? 'Test execution completed'
+                  : `Test execution status: ${status}. Use akamai_raw_request with test-management API to check later.`,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error: any) {
+      logger.error('Failed to run test suite', { error });
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ error: true, message: error.message }, null, 2) },
+        ],
+      };
+    }
+  };
+
+  return { definition, handler };
+}
+
+/**
+ * Reporting Tool
+ *
+ * Get traffic and performance reports (replaces mPulse for basic metrics).
+ */
+export function getReportingTool(): { definition: MCPToolDefinition; handler: ToolHandler } {
+  const definition: MCPToolDefinition = {
+    name: 'akamai_traffic_report',
+    description: `Get traffic and performance reports for your Akamai properties.
+
+Returns:
+- Traffic volume (hits, bytes)
+- Cache hit rates
+- Error rates
+- Response times
+
+Note: For Real User Monitoring (RUM) data, mPulse API is required but not publicly available.
+
+Example: "Show me traffic report for CP code 12345"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        cpCode: {
+          type: 'string',
+          description: 'CP code to get reports for',
+        },
+        reportType: {
+          type: 'string',
+          enum: ['traffic-by-time', 'hits-by-response-class', 'hits-by-cache-state'],
+          description: 'Type of report (default: traffic-by-time)',
+          default: 'traffic-by-time',
+        },
+        startDate: {
+          type: 'string',
+          description: 'Start date (ISO format, e.g., 2024-01-01T00:00:00Z)',
+        },
+        endDate: {
+          type: 'string',
+          description: 'End date (ISO format)',
+        },
+        interval: {
+          type: 'string',
+          enum: ['FIVE_MINUTES', 'HOUR', 'DAY', 'WEEK', 'MONTH'],
+          description: 'Reporting interval (default: DAY)',
+          default: 'DAY',
+        },
+      },
+      required: ['cpCode'],
+      additionalProperties: false,
+    },
+  };
+
+  const handler: ToolHandler = async (args: Record<string, unknown>) => {
+    const logger = getLogger();
+    const startTime = Date.now();
+
+    try {
+      const cpCode = args.cpCode as string;
+      const reportType = (args.reportType as string) || 'traffic-by-time';
+      const interval = (args.interval as string) || 'DAY';
+
+      // Default date range: last 7 days
+      const endDate = args.endDate as string || new Date().toISOString();
+      const startDateDefault = new Date();
+      startDateDefault.setDate(startDateDefault.getDate() - 7);
+      const startDate = args.startDate as string || startDateDefault.toISOString();
+
+      logger.info(`Fetching ${reportType} report for CP code ${cpCode}`);
+
+      // Use Reporting API
+      const reportBody = {
+        objectType: 'cpcode',
+        objectIds: [cpCode],
+        metrics: ['edgeHits', 'edgeHitsPercent', 'originHits', 'bytesOffload', 'edgeBytes', 'originBytes'],
+        filters: {},
+      };
+
+      const reportResult = await executeOperation(
+        'akamai_reporting_api_post-report',
+        { version: 1, name: reportType },
+        {
+          start: startDate,
+          end: endDate,
+          interval,
+        },
+        reportBody
+      );
+
+      // Process results
+      const data = reportResult?.data || [];
+
+      // Calculate summaries
+      const totalEdgeHits = data.reduce((sum: number, d: any) => sum + (d.edgeHits || 0), 0);
+      const totalOriginHits = data.reduce((sum: number, d: any) => sum + (d.originHits || 0), 0);
+      const totalEdgeBytes = data.reduce((sum: number, d: any) => sum + (d.edgeBytes || 0), 0);
+      const totalOriginBytes = data.reduce((sum: number, d: any) => sum + (d.originBytes || 0), 0);
+      const cacheHitRate = totalEdgeHits > 0
+        ? ((totalEdgeHits - totalOriginHits) / totalEdgeHits * 100).toFixed(2)
+        : 'N/A';
+      const bytesOffloadRate = totalEdgeBytes > 0
+        ? ((totalEdgeBytes - totalOriginBytes) / totalEdgeBytes * 100).toFixed(2)
+        : 'N/A';
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                report: {
+                  cpCode,
+                  reportType,
+                  interval,
+                  dateRange: { start: startDate, end: endDate },
+                },
+                summary: {
+                  totalEdgeHits,
+                  totalOriginHits,
+                  cacheHitRate: `${cacheHitRate}%`,
+                  totalEdgeBytes,
+                  totalOriginBytes,
+                  bytesOffloadRate: `${bytesOffloadRate}%`,
+                },
+                timeSeries: data.slice(0, 50).map((d: any) => ({
+                  timestamp: d.startdatetime,
+                  edgeHits: d.edgeHits,
+                  originHits: d.originHits,
+                  edgeBytes: d.edgeBytes,
+                  bytesOffload: d.bytesOffload,
+                })),
+                fetchTime: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+                note: 'For Real User Monitoring (RUM) data, mPulse subscription and API access is required.',
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error: any) {
+      logger.error('Failed to get traffic report', { error });
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ error: true, message: error.message }, null, 2) },
+        ],
+      };
+    }
+  };
+
+  return { definition, handler };
+}
+
+/**
  * Get all workflow tools
  */
 export function getWorkflowTools(): Array<{ definition: MCPToolDefinition; handler: ToolHandler }> {
@@ -1134,5 +1981,9 @@ export function getWorkflowTools(): Array<{ definition: MCPToolDefinition; handl
     getGtmOverviewTool(),
     getEdgeWorkerDeployTool(),
     getCertificateAuditTool(),
+    getBulkOnboardingTool(),
+    getEnvironmentDeployTool(),
+    getTestSuiteRunnerTool(),
+    getReportingTool(),
   ];
 }

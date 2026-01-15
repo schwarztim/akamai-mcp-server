@@ -1971,6 +1971,609 @@ Example: "Show me traffic report for CP code 12345"`,
 }
 
 /**
+ * Security Configuration Analyzer Tool
+ *
+ * Deep analysis of AppSec configurations with understanding of:
+ * - Control execution order (11 controls in sequence)
+ * - Match target precedence (last match wins, API > Website)
+ * - Control interactions and conflicts
+ * - Optimization recommendations
+ */
+export function getSecurityAnalyzerTool(): { definition: MCPToolDefinition; handler: ToolHandler } {
+  const definition: MCPToolDefinition = {
+    name: 'akamai_security_analyzer',
+    description: `Deep analysis of Akamai AppSec security configurations.
+
+**Understanding Security Control Order of Operations:**
+When a request arrives, controls are evaluated IN ORDER:
+1. IP/Geo Firewall - Block by IP, geographic region, network lists
+2. DoS Protection - Rate-based protections against flooding
+3. Rate Limiting - Request rate controls per client/path
+4. URL Protection - URL-specific blocking rules
+5. Slow POST Protection - Mitigate slow HTTP POST attacks
+6. Custom Rules - User-defined rules (conditions + actions)
+7. Web Application Firewall (WAF) - OWASP/Kona rules
+8. API Request Constraints - API-specific validations
+9. Client Reputation - IP reputation scoring
+10. Bot Management - Bot detection and mitigation
+11. Client-Side Protection - Browser-side security
+
+**CRITICAL: A request BLOCKED by an earlier control NEVER reaches later controls.**
+
+**Match Target Precedence:**
+- Match targets evaluate TOP to BOTTOM
+- LAST matching target wins (defines which policy applies)
+- API Match Targets ALWAYS take precedence over Website Match Targets
+- Order more specific criteria LATER in the list
+
+**Control Interactions:**
+- Bot controls set to "allow" can OVERRIDE DoS blocks
+- Network list bypasses can skip entire control chains
+- Custom rules can short-circuit WAF evaluation
+
+Example: "Analyze my security configuration for conflicts and issues"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        configId: {
+          type: 'number',
+          description: 'Security configuration ID (optional - analyzes all if not specified)',
+        },
+        version: {
+          type: 'number',
+          description: 'Configuration version (defaults to latest)',
+        },
+        analysisDepth: {
+          type: 'string',
+          enum: ['quick', 'standard', 'deep'],
+          description: 'Analysis depth: quick (overview), standard (policies + controls), deep (full rule analysis)',
+          default: 'standard',
+        },
+        focusArea: {
+          type: 'string',
+          enum: ['all', 'match-targets', 'control-order', 'conflicts', 'optimization'],
+          description: 'Focus area for analysis',
+          default: 'all',
+        },
+      },
+      additionalProperties: false,
+    },
+  };
+
+  // Security control order of operations (critical for understanding behavior)
+  const CONTROL_ORDER = [
+    { name: 'IP/Geo Firewall', key: 'ipGeo', order: 1, description: 'Block by IP, region, network lists' },
+    { name: 'DoS Protection', key: 'dos', order: 2, description: 'Rate-based flood protection' },
+    { name: 'Rate Limiting', key: 'rateLimiting', order: 3, description: 'Request rate controls' },
+    { name: 'URL Protection', key: 'urlProtection', order: 4, description: 'URL-specific blocking' },
+    { name: 'Slow POST Protection', key: 'slowPost', order: 5, description: 'Slow POST attack mitigation' },
+    { name: 'Custom Rules', key: 'customRules', order: 6, description: 'User-defined rules' },
+    { name: 'Web Application Firewall', key: 'waf', order: 7, description: 'OWASP/Kona WAF rules' },
+    { name: 'API Request Constraints', key: 'apiConstraints', order: 8, description: 'API validations' },
+    { name: 'Client Reputation', key: 'clientRep', order: 9, description: 'IP reputation scoring' },
+    { name: 'Bot Management', key: 'botManagement', order: 10, description: 'Bot detection/mitigation' },
+    { name: 'Client-Side Protection', key: 'clientSide', order: 11, description: 'Browser-side security' },
+  ];
+
+  const handler: ToolHandler = async (args: Record<string, unknown>) => {
+    const logger = getLogger();
+    const startTime = Date.now();
+
+    try {
+      const configId = args.configId as number;
+      const version = args.version as number;
+      const analysisDepth = (args.analysisDepth as string) || 'standard';
+      const focusArea = (args.focusArea as string) || 'all';
+
+      logger.info(`Analyzing security configuration${configId ? ` ${configId}` : 's'} (depth: ${analysisDepth})`);
+
+      // Fetch configurations
+      const configsData = await executeOperation('akamai_appsec_get-configs').catch(() => ({ configurations: [] }));
+      let configs = configsData?.configurations || [];
+
+      if (configId) {
+        configs = configs.filter((c: any) => c.id === configId);
+        if (configs.length === 0) {
+          throw new Error(`Configuration ${configId} not found`);
+        }
+      }
+
+      const analyses: any[] = [];
+
+      // Analyze each configuration (parallel for speed)
+      const configPromises = configs.slice(0, 5).map(async (config: any) => {
+        const targetVersion = version || config.latestVersion || 1;
+
+        try {
+          // Parallel fetch of all security data for speed
+          const [
+            policiesData,
+            matchTargetsData,
+            selectedHostnamesData,
+          ] = await Promise.all([
+            executeOperation(
+              'akamai_appsec_get-config-versions-version-security-policies',
+              { configId: config.id, versionNumber: targetVersion }
+            ).catch(() => ({ policies: [] })),
+            executeOperation(
+              'akamai_appsec_get-config-versions-version-match-targets',
+              { configId: config.id, versionNumber: targetVersion }
+            ).catch(() => ({ matchTargets: { websiteTargets: [], apiTargets: [] } })),
+            executeOperation(
+              'akamai_appsec_get-config-versions-version-selected-hostnames',
+              { configId: config.id, versionNumber: targetVersion }
+            ).catch(() => ({ hostnameList: [] })),
+          ]);
+
+          const policies = policiesData?.policies || [];
+          const matchTargets = matchTargetsData?.matchTargets || { websiteTargets: [], apiTargets: [] };
+          const hostnames = selectedHostnamesData?.hostnameList || [];
+
+          // Build analysis for this config
+          const configAnalysis: any = {
+            configId: config.id,
+            configName: config.name,
+            version: targetVersion,
+            stagingVersion: config.stagingVersion,
+            productionVersion: config.productionVersion,
+            hostnames: hostnames.slice(0, 10),
+            hostnameCount: hostnames.length,
+          };
+
+          // Analyze match targets
+          if (focusArea === 'all' || focusArea === 'match-targets') {
+            configAnalysis.matchTargetAnalysis = analyzeMatchTargets(matchTargets, policies);
+          }
+
+          // Analyze control order per policy
+          if ((focusArea === 'all' || focusArea === 'control-order') && analysisDepth !== 'quick') {
+            configAnalysis.policyAnalysis = await analyzePolicies(
+              config.id,
+              targetVersion,
+              policies,
+              analysisDepth === 'deep'
+            );
+          }
+
+          // Identify conflicts
+          if (focusArea === 'all' || focusArea === 'conflicts') {
+            configAnalysis.conflicts = identifyConflicts(configAnalysis);
+          }
+
+          // Optimization recommendations
+          if (focusArea === 'all' || focusArea === 'optimization') {
+            configAnalysis.recommendations = generateRecommendations(configAnalysis, matchTargets);
+          }
+
+          return configAnalysis;
+        } catch (e: any) {
+          return {
+            configId: config.id,
+            configName: config.name,
+            error: e.message,
+          };
+        }
+      });
+
+      const configAnalyses = await Promise.all(configPromises);
+      analyses.push(...configAnalyses);
+
+      // Build summary
+      const summary = {
+        totalConfigs: analyses.length,
+        totalPolicies: analyses.reduce((sum, a) => sum + (a.policyAnalysis?.length || 0), 0),
+        totalMatchTargets: analyses.reduce((sum, a) =>
+          sum + (a.matchTargetAnalysis?.websiteTargets?.length || 0) +
+          (a.matchTargetAnalysis?.apiTargets?.length || 0), 0),
+        totalConflicts: analyses.reduce((sum, a) => sum + (a.conflicts?.length || 0), 0),
+        totalRecommendations: analyses.reduce((sum, a) => sum + (a.recommendations?.length || 0), 0),
+        fetchTime: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+      };
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                summary,
+                controlOrderReference: CONTROL_ORDER,
+                analyses,
+                notes: [
+                  'Controls execute in ORDER - earlier blocks prevent later controls from seeing traffic',
+                  'Match targets evaluate TOP to BOTTOM - LAST match wins',
+                  'API Match Targets ALWAYS take precedence over Website Match Targets',
+                  'Bot controls on "allow" can override DoS blocks',
+                ],
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error: any) {
+      logger.error('Failed to analyze security configuration', { error });
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ error: true, message: error.message }, null, 2) },
+        ],
+      };
+    }
+  };
+
+  // Helper: Analyze match targets
+  function analyzeMatchTargets(matchTargets: any, policies: any[]) {
+    const websiteTargets = matchTargets.websiteTargets || [];
+    const apiTargets = matchTargets.apiTargets || [];
+
+    const policyMap = new Map(policies.map((p: any) => [p.policyId, p.policyName]));
+
+    const analysis: any = {
+      websiteTargets: websiteTargets.map((t: any, index: number) => ({
+        order: index + 1,
+        targetId: t.targetId,
+        securityPolicy: {
+          id: t.securityPolicy?.policyId,
+          name: policyMap.get(t.securityPolicy?.policyId) || t.securityPolicy?.policyId,
+        },
+        hostnames: t.hostnames?.slice(0, 5),
+        hostnameCount: t.hostnames?.length || 0,
+        paths: t.filePaths?.slice(0, 5),
+        pathCount: t.filePaths?.length || 0,
+        bypassNetworkLists: t.bypassNetworkLists || [],
+        isNegativePathMatch: t.isNegativePathMatch || false,
+        isNegativeFileExtensionMatch: t.isNegativeFileExtensionMatch || false,
+        effectiveMatch: t.effectiveSecurityControls || 'All controls',
+      })),
+      apiTargets: apiTargets.map((t: any, index: number) => ({
+        order: index + 1,
+        targetId: t.targetId,
+        securityPolicy: {
+          id: t.securityPolicy?.policyId,
+          name: policyMap.get(t.securityPolicy?.policyId) || t.securityPolicy?.policyId,
+        },
+        apiEndpoints: t.apis?.slice(0, 5),
+        apiCount: t.apis?.length || 0,
+        bypassNetworkLists: t.bypassNetworkLists || [],
+        precedence: 'TAKES PRECEDENCE over Website Targets',
+      })),
+      precedenceWarnings: [],
+    };
+
+    // Check for precedence issues
+    if (websiteTargets.length > 0) {
+      // Check for catch-all patterns early in the list
+      websiteTargets.forEach((t: any, i: number) => {
+        if (i < websiteTargets.length - 1) {
+          // Not the last target
+          const hasWildcard = t.hostnames?.some((h: string) => h === '*' || h.includes('*'));
+          const hasCatchAllPath = t.filePaths?.some((p: string) => p === '/*' || p === '*');
+
+          if (hasWildcard || hasCatchAllPath) {
+            analysis.precedenceWarnings.push({
+              type: 'CATCH_ALL_NOT_LAST',
+              targetId: t.targetId,
+              position: i + 1,
+              issue: 'Catch-all pattern not in last position - may match requests intended for later targets',
+              recommendation: 'Move specific match criteria LATER in the list',
+            });
+          }
+        }
+      });
+
+      // Check for overlapping patterns
+      for (let i = 0; i < websiteTargets.length - 1; i++) {
+        for (let j = i + 1; j < websiteTargets.length; j++) {
+          const t1 = websiteTargets[i];
+          const t2 = websiteTargets[j];
+
+          const hostOverlap = t1.hostnames?.some((h: string) => t2.hostnames?.includes(h));
+          if (hostOverlap && t1.securityPolicy?.policyId !== t2.securityPolicy?.policyId) {
+            analysis.precedenceWarnings.push({
+              type: 'OVERLAPPING_TARGETS',
+              targets: [t1.targetId, t2.targetId],
+              issue: `Targets ${i + 1} and ${j + 1} have overlapping hostnames with different policies`,
+              winner: `Target ${j + 1} (${t2.securityPolicy?.policyId}) wins for overlapping requests`,
+              recommendation: 'Verify this is intentional - last match wins',
+            });
+          }
+        }
+      }
+    }
+
+    return analysis;
+  }
+
+  // Helper: Analyze policies and their control settings
+  async function analyzePolicies(
+    configId: number,
+    version: number,
+    policies: any[],
+    deep: boolean
+  ): Promise<any[]> {
+    const policyAnalyses = await Promise.all(
+      policies.slice(0, 10).map(async (policy: any) => {
+        const policyId = policy.policyId;
+        const policyAnalysis: any = {
+          policyId,
+          policyName: policy.policyName,
+          controls: [],
+        };
+
+        try {
+          // Fetch control settings in parallel for speed
+          const [
+            ipGeoData,
+            ratePolicyData,
+            slowPostData,
+            wafModeData,
+            botData,
+            customRulesData,
+          ] = await Promise.all([
+            executeOperation(
+              'akamai_appsec_get-config-versions-version-security-policies-policyid-ip-geo-firewall',
+              { configId, versionNumber: version, policyId }
+            ).catch(() => null),
+            executeOperation(
+              'akamai_appsec_get-config-versions-version-security-policies-policyid-rate-policies',
+              { configId, versionNumber: version, policyId }
+            ).catch(() => ({ ratePolicies: [] })),
+            executeOperation(
+              'akamai_appsec_get-config-versions-version-security-policies-policyid-slow-post',
+              { configId, versionNumber: version, policyId }
+            ).catch(() => null),
+            executeOperation(
+              'akamai_appsec_get-config-versions-version-security-policies-policyid-mode',
+              { configId, versionNumber: version, policyId }
+            ).catch(() => null),
+            executeOperation(
+              'akamai_appsec_get-config-versions-version-security-policies-policyid-transactional-analysis',
+              { configId, versionNumber: version, policyId }
+            ).catch(() => null),
+            deep ? executeOperation(
+              'akamai_appsec_get-config-versions-version-security-policies-policyid-custom-rules',
+              { configId, versionNumber: version, policyId }
+            ).catch(() => ({ customRules: [] })) : Promise.resolve({ customRules: [] }),
+          ]);
+
+          // Build control analysis following the order of operations
+          policyAnalysis.controls = [
+            {
+              order: 1,
+              name: 'IP/Geo Firewall',
+              status: ipGeoData ? 'CONFIGURED' : 'NOT_CONFIGURED',
+              mode: ipGeoData?.block || 'N/A',
+              geoBlock: ipGeoData?.geoControls?.blockedIPNetworkLists?.networkList?.length > 0 ? 'ENABLED' : 'DISABLED',
+              ipBlock: ipGeoData?.ipControls?.blockedIPNetworkLists?.networkList?.length > 0 ? 'ENABLED' : 'DISABLED',
+              allowLists: ipGeoData?.ipControls?.allowedIPNetworkLists?.networkList?.length || 0,
+              blockLists: ipGeoData?.ipControls?.blockedIPNetworkLists?.networkList?.length || 0,
+            },
+            {
+              order: 2,
+              name: 'DoS Protection',
+              status: 'CHECK_RATE_POLICIES',
+              note: 'DoS protection tied to rate policies',
+            },
+            {
+              order: 3,
+              name: 'Rate Limiting',
+              status: ratePolicyData?.ratePolicies?.length > 0 ? 'CONFIGURED' : 'NOT_CONFIGURED',
+              policyCount: ratePolicyData?.ratePolicies?.length || 0,
+              policies: ratePolicyData?.ratePolicies?.slice(0, 5).map((rp: any) => ({
+                id: rp.id,
+                name: rp.name,
+                averageThreshold: rp.averageThreshold,
+                burstThreshold: rp.burstThreshold,
+                clientIdentifier: rp.clientIdentifier,
+              })),
+            },
+            {
+              order: 4,
+              name: 'URL Protection',
+              status: 'CHECK_CUSTOM_RULES',
+              note: 'URL protection via custom rules or pragmatic controls',
+            },
+            {
+              order: 5,
+              name: 'Slow POST Protection',
+              status: slowPostData?.slowPost?.action ? 'CONFIGURED' : 'NOT_CONFIGURED',
+              action: slowPostData?.slowPost?.action || 'N/A',
+              durationThreshold: slowPostData?.slowPost?.slowRateThreshold?.period,
+              rateThreshold: slowPostData?.slowPost?.slowRateThreshold?.rate,
+            },
+            {
+              order: 6,
+              name: 'Custom Rules',
+              status: customRulesData?.customRules?.length > 0 ? 'CONFIGURED' : 'NOT_CONFIGURED',
+              ruleCount: customRulesData?.customRules?.length || 0,
+              rules: deep ? customRulesData?.customRules?.slice(0, 10).map((cr: any) => ({
+                id: cr.ruleId,
+                name: cr.ruleName,
+                action: cr.action,
+                conditions: cr.conditions?.length || 0,
+              })) : undefined,
+            },
+            {
+              order: 7,
+              name: 'Web Application Firewall',
+              status: wafModeData?.mode ? 'CONFIGURED' : 'NOT_CONFIGURED',
+              mode: wafModeData?.mode || 'N/A',
+              modeExplanation: wafModeData?.mode === 'AAG'
+                ? 'Adaptive Attack Groups (automatic)'
+                : wafModeData?.mode === 'KRS'
+                ? 'Kona Rule Set (manual)'
+                : 'Unknown mode',
+            },
+            {
+              order: 8,
+              name: 'API Request Constraints',
+              status: 'CHECK_API_TARGETS',
+              note: 'API constraints apply to API match targets',
+            },
+            {
+              order: 9,
+              name: 'Client Reputation',
+              status: 'REQUIRES_LICENSE',
+              note: 'Client reputation requires additional licensing',
+            },
+            {
+              order: 10,
+              name: 'Bot Management',
+              status: botData ? 'CONFIGURED' : 'NOT_CONFIGURED',
+              showBotStates: botData ? 'AVAILABLE' : 'N/A',
+              warning: botData ? 'Bot controls on ALLOW can override DoS blocks' : undefined,
+            },
+            {
+              order: 11,
+              name: 'Client-Side Protection',
+              status: 'CHECK_CSP_SETTINGS',
+              note: 'Client-side protection for browser security',
+            },
+          ];
+
+        } catch (e: any) {
+          policyAnalysis.error = e.message;
+        }
+
+        return policyAnalysis;
+      })
+    );
+
+    return policyAnalyses;
+  }
+
+  // Helper: Identify conflicts and issues
+  function identifyConflicts(analysis: any): any[] {
+    const conflicts: any[] = [];
+
+    // Check for match target precedence issues
+    if (analysis.matchTargetAnalysis?.precedenceWarnings) {
+      conflicts.push(...analysis.matchTargetAnalysis.precedenceWarnings);
+    }
+
+    // Check for control conflicts
+    analysis.policyAnalysis?.forEach((policy: any) => {
+      const controls = policy.controls || [];
+
+      // Check: Bot Management on "allow" with DoS enabled
+      const botControl = controls.find((c: any) => c.name === 'Bot Management');
+      const dosControl = controls.find((c: any) => c.name === 'DoS Protection');
+
+      if (botControl?.status === 'CONFIGURED' && dosControl?.status !== 'NOT_CONFIGURED') {
+        conflicts.push({
+          type: 'BOT_DOS_INTERACTION',
+          policyId: policy.policyId,
+          severity: 'WARNING',
+          issue: 'Bot Management configured with DoS Protection active',
+          explanation: 'Requests allowed by Bot Management bypass DoS controls - ensure this is intentional',
+          recommendation: 'Review bot detection actions - "allow" actions skip DoS evaluation',
+        });
+      }
+
+      // Check: WAF in KRS mode without regular updates
+      const wafControl = controls.find((c: any) => c.name === 'Web Application Firewall');
+      if (wafControl?.mode === 'KRS') {
+        conflicts.push({
+          type: 'MANUAL_WAF_MODE',
+          policyId: policy.policyId,
+          severity: 'INFO',
+          issue: 'WAF in KRS (Kona Rule Set) mode - requires manual rule management',
+          recommendation: 'Consider AAG (Adaptive Attack Groups) for automatic protection',
+        });
+      }
+
+      // Check: No rate limiting with WAF enabled
+      const rateLimitControl = controls.find((c: any) => c.name === 'Rate Limiting');
+      if (rateLimitControl?.status === 'NOT_CONFIGURED' && wafControl?.status === 'CONFIGURED') {
+        conflicts.push({
+          type: 'NO_RATE_LIMITING',
+          policyId: policy.policyId,
+          severity: 'WARNING',
+          issue: 'WAF enabled without rate limiting',
+          explanation: 'High-volume attacks can stress WAF evaluation',
+          recommendation: 'Add rate limiting to protect against volumetric attacks',
+        });
+      }
+    });
+
+    return conflicts;
+  }
+
+  // Helper: Generate optimization recommendations
+  function generateRecommendations(analysis: any, matchTargets: any): any[] {
+    const recommendations: any[] = [];
+
+    // Match target ordering
+    const websiteTargets = matchTargets.websiteTargets || [];
+    if (websiteTargets.length > 5) {
+      recommendations.push({
+        type: 'MATCH_TARGET_ORDERING',
+        priority: 'MEDIUM',
+        recommendation: 'Review match target order - ensure most specific patterns are LAST',
+        reason: 'With many targets, incorrect ordering can route traffic to wrong policies',
+        action: 'Order targets from general (catch-all) to specific - specific patterns should be at the bottom',
+      });
+    }
+
+    // Policy analysis recommendations
+    analysis.policyAnalysis?.forEach((policy: any) => {
+      const controls = policy.controls || [];
+
+      // Check control order optimization
+      const ipGeo = controls.find((c: any) => c.order === 1);
+      const rateLimit = controls.find((c: any) => c.order === 3);
+
+      if (ipGeo?.blockLists === 0 && rateLimit?.policyCount > 0) {
+        recommendations.push({
+          type: 'IP_BLOCKING_OPPORTUNITY',
+          policyId: policy.policyId,
+          priority: 'LOW',
+          recommendation: 'Consider adding known bad IPs to IP/Geo block lists',
+          reason: 'IP blocking (order 1) is faster than rate limiting (order 3)',
+          action: 'Review rate-limited IPs and add persistent offenders to network lists',
+        });
+      }
+
+      // Slow POST recommendation
+      const slowPost = controls.find((c: any) => c.order === 5);
+      if (slowPost?.status === 'NOT_CONFIGURED') {
+        recommendations.push({
+          type: 'ENABLE_SLOW_POST',
+          policyId: policy.policyId,
+          priority: 'MEDIUM',
+          recommendation: 'Enable Slow POST protection',
+          reason: 'Slow POST attacks can exhaust server resources',
+          action: 'Configure slow POST protection with appropriate thresholds',
+        });
+      }
+    });
+
+    // API vs Website target recommendations
+    const apiTargets = matchTargets.apiTargets || [];
+    if (apiTargets.length === 0 && websiteTargets.length > 0) {
+      const hasApiPaths = websiteTargets.some((t: any) =>
+        t.filePaths?.some((p: string) => p.includes('/api/') || p.includes('/v1/') || p.includes('/v2/'))
+      );
+
+      if (hasApiPaths) {
+        recommendations.push({
+          type: 'USE_API_MATCH_TARGETS',
+          priority: 'HIGH',
+          recommendation: 'Create API Match Targets for API endpoints',
+          reason: 'API Match Targets have PRECEDENCE over Website Match Targets and allow API-specific controls',
+          action: 'Move /api/* paths from Website targets to API Match Targets',
+        });
+      }
+    }
+
+    return recommendations;
+  }
+
+  return { definition, handler };
+}
+
+/**
  * Get all workflow tools
  */
 export function getWorkflowTools(): Array<{ definition: MCPToolDefinition; handler: ToolHandler }> {
@@ -1985,5 +2588,6 @@ export function getWorkflowTools(): Array<{ definition: MCPToolDefinition; handl
     getEnvironmentDeployTool(),
     getTestSuiteRunnerTool(),
     getReportingTool(),
+    getSecurityAnalyzerTool(),
   ];
 }

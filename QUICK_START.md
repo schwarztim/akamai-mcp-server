@@ -62,6 +62,40 @@ The MCP server is **automatically managed by bob**:
 - ✅ Auto-restarts if it crashes
 - ✅ Zero manual intervention required
 
+## High-Performance Aggregation Tools
+
+These tools are designed for common high-level queries that would otherwise require many sequential API calls:
+
+| Tool | What It Does | Performance |
+|------|-------------|-------------|
+| `akamai_list_all_hostnames` | Gets ALL hostnames across ALL properties | Parallel execution, ~10-30 seconds |
+| `akamai_account_overview` | Comprehensive account summary | ~2-5 seconds |
+| `akamai_list_all_properties` | Lists all CDN properties with metadata | ~5-15 seconds |
+
+### Why These Are Faster
+
+Instead of sequential calls like:
+```
+❌ CLI approach (8+ minutes):
+   contracts → groups → properties (one by one) → hostnames (one by one)
+```
+
+The aggregation tools use:
+```
+✅ MCP approach (~30 seconds):
+   contracts + groups (parallel) → properties (parallel batches) → hostnames (parallel batches)
+   Plus: 5-minute response caching
+```
+
+### Example: Get All Hostnames
+
+Just ask naturally:
+```
+Show me all hostnames in my Akamai account
+List every hostname across all properties
+What hostnames are configured in Akamai?
+```
+
 ## Example Questions to Try
 
 ### Account & Identity
@@ -225,5 +259,6 @@ Should show:
 3. ✅ **Natural**: Just ask in plain English
 4. ✅ **Zero Config**: Once set up, no maintenance needed
 5. ✅ **Always Current**: Synced with Akamai's OpenAPI specs
+6. ✅ **Fast**: Aggregation tools reduce 8+ min queries to ~30 seconds
 
 **Just start bob and ask questions!** 🚀

@@ -34,9 +34,10 @@ export class EdgeGridClient {
    */
   async get<T = unknown>(
     path: string,
-    params?: Record<string, string | number | boolean>
+    params?: Record<string, string | number | boolean>,
+    headers?: Record<string, string>
   ): Promise<T> {
-    return this.request<T>('GET', path, undefined, params);
+    return this.request<T>('GET', path, undefined, params, headers);
   }
 
   /**
@@ -45,9 +46,10 @@ export class EdgeGridClient {
   async post<T = unknown>(
     path: string,
     body?: unknown,
-    params?: Record<string, string | number | boolean>
+    params?: Record<string, string | number | boolean>,
+    headers?: Record<string, string>
   ): Promise<T> {
-    return this.request<T>('POST', path, body, params);
+    return this.request<T>('POST', path, body, params, headers);
   }
 
   /**
@@ -56,9 +58,10 @@ export class EdgeGridClient {
   async put<T = unknown>(
     path: string,
     body?: unknown,
-    params?: Record<string, string | number | boolean>
+    params?: Record<string, string | number | boolean>,
+    headers?: Record<string, string>
   ): Promise<T> {
-    return this.request<T>('PUT', path, body, params);
+    return this.request<T>('PUT', path, body, params, headers);
   }
 
   /**
@@ -66,9 +69,10 @@ export class EdgeGridClient {
    */
   async delete<T = unknown>(
     path: string,
-    params?: Record<string, string | number | boolean>
+    params?: Record<string, string | number | boolean>,
+    headers?: Record<string, string>
   ): Promise<T> {
-    return this.request<T>('DELETE', path, undefined, params);
+    return this.request<T>('DELETE', path, undefined, params, headers);
   }
 
   /**
@@ -78,7 +82,8 @@ export class EdgeGridClient {
     method: string,
     path: string,
     body?: unknown,
-    params?: Record<string, string | number | boolean>
+    params?: Record<string, string | number | boolean>,
+    customHeaders?: Record<string, string>
   ): Promise<T> {
     // Apply rate limiting
     await this.rateLimiter.acquire();
@@ -90,15 +95,17 @@ export class EdgeGridClient {
 
       try {
         const response = await new Promise<{ body: T; statusCode: number }>((resolve, reject) => {
+          // Build headers: start with custom headers, add Content-Type if body present
+          const headers: Record<string, string> = { ...customHeaders };
+          if (body) {
+            headers['Content-Type'] = 'application/json';
+          }
+
           const options: any = {
             path,  // Use original path without query string
             method,
             body: body ? JSON.stringify(body) : undefined,
-            headers: body
-              ? {
-                  'Content-Type': 'application/json',
-                }
-              : {},  // Empty object instead of undefined
+            headers,
           };
 
           // Add query parameters using qs property

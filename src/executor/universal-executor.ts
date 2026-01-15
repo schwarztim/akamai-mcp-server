@@ -87,17 +87,18 @@ export class UniversalExecutor {
     options: ExecutionOptions = {}
   ): Promise<ExecutionResult> {
 
-    // Validate required parameters
-    this.validateParameters(operation, options);
+    // Build headers FIRST (includes auto-injection for required headers)
+    // This must happen before validation so auto-injected headers are considered
+    const headers = this.buildHeaders(operation, options.headers || {});
+
+    // Validate required parameters (with merged headers)
+    this.validateParameters(operation, { ...options, headers });
 
     // Build request path
     const path = this.buildPath(operation, options.pathParams || {});
 
     // Build query string
     const queryParams = this.buildQueryParams(operation, options.queryParams || {});
-
-    // Build headers
-    const headers = this.buildHeaders(operation, options.headers || {});
 
     // Execute with pagination if requested
     if (options.paginate && operation.supportsPagination) {
@@ -126,10 +127,13 @@ export class UniversalExecutor {
       }
     }
 
-    // Check required headers
+    // Check required headers (case-insensitive)
     for (const param of operation.headerParameters) {
-      if (param.required && !options.headers?.[param.name]) {
-        throw new Error(`Missing required header: ${param.name}`);
+      if (param.required) {
+        const headerKeys = Object.keys(options.headers || {}).map(k => k.toLowerCase());
+        if (!headerKeys.includes(param.name.toLowerCase())) {
+          throw new Error(`Missing required header: ${param.name}`);
+        }
       }
     }
 
@@ -143,7 +147,19 @@ export class UniversalExecutor {
    * Build request path with parameter substitution
    */
   private buildPath(operation: OperationDefinition, pathParams: Record<string, string | number>): string {
-    let path = operation.path;
+    // Get base path from servers array (e.g., "/papi/v1" from "https://{hostname}/papi/v1")
+    let basePath = '';
+    if (operation.servers && operation.servers.length > 0) {
+      const serverUrl = operation.servers[0].url;
+      // Extract path portion from URL (after the hostname placeholder or domain)
+      const match = serverUrl.match(/https?:\/\/[^/]+(\/.*)/);
+      if (match) {
+        basePath = match[1];
+      }
+    }
+
+    // Combine base path with operation path
+    let path = basePath + operation.path;
 
     for (const [key, value] of Object.entries(pathParams)) {
       path = path.replace(`{${key}}`, encodeURIComponent(String(value)));
@@ -175,13 +191,14 @@ export class UniversalExecutor {
   }
 
   /**
-   * Build headers with allowlist
+   * Build headers with allowlist and auto-inject required headers
    */
   private buildHeaders(
-    _operation: OperationDefinition,
+    operation: OperationDefinition,
     headers: Record<string, string>
   ): Record<string, string> {
     // Header allowlist (security: prevent header injection)
+    // Includes standard HTTP headers + Akamai-specific headers
     const allowedHeaders = [
       'accept',
       'content-type',
@@ -189,10 +206,23 @@ export class UniversalExecutor {
       'if-none-match',
       'prefer',
       'x-request-id',
+      // Akamai-specific headers
+      'papi-use-prefixes',
+      'x-akamai-contract',
+      'x-akamai-group',
+      'x-akamai-purge',
+      'akamai-signature-algorithm',
     ];
 
     const result: Record<string, string> = {};
 
+    // Auto-inject required headers based on API product
+    // PAPI requires PAPI-Use-Prefixes header
+    if (operation.product === 'papi') {
+      result['PAPI-Use-Prefixes'] = 'true';
+    }
+
+    // Apply user-provided headers (override auto-injected ones)
     for (const [key, value] of Object.entries(headers)) {
       const lowerKey = key.toLowerCase();
       if (allowedHeaders.includes(lowerKey)) {
@@ -213,7 +243,7 @@ export class UniversalExecutor {
     operation: OperationDefinition,
     path: string,
     queryParams: Record<string, string>,
-    _headers: Record<string, string>,
+    headers: Record<string, string>,
     body?: unknown
   ): Promise<ExecutionResult> {
     const client = getEdgeGridClient();
@@ -224,21 +254,20 @@ export class UniversalExecutor {
 
       switch (method) {
         case 'GET':
-          response = await client.get(path, queryParams);
+          response = await client.get(path, queryParams, headers);
           break;
         case 'POST':
-          response = await client.post(path, body, queryParams);
+          response = await client.post(path, body, queryParams, headers);
           break;
         case 'PUT':
-          response = await client.put(path, body, queryParams);
+          response = await client.put(path, body, queryParams, headers);
           break;
         case 'DELETE':
-          response = await client.delete(path, queryParams);
+          response = await client.delete(path, queryParams, headers);
           break;
         case 'PATCH':
           // EdgeGrid client doesn't have patch, use post with method override
-          // Note: headers parameter would need to be passed to client for full implementation
-          response = await client.post(path, body, queryParams);
+          response = await client.post(path, body, queryParams, headers);
           break;
         default:
           throw new Error(`Unsupported HTTP method: ${method}`);

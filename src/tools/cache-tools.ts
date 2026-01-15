@@ -88,8 +88,8 @@ Example: "Purge https://www.example.com/page.html from cache"`,
 
       // Determine the correct operation based on action
       const operationName = action === 'delete'
-        ? 'akamai_ccu_deleteByUrl'
-        : 'akamai_ccu_invalidateByUrl';
+        ? 'akamai_ccu_post-delete-url'
+        : 'akamai_ccu_post-invalidate-url';
 
       const result = await executeOperation(
         operationName,
@@ -190,8 +190,8 @@ Example: "Purge all content with tag 'product-123'"`,
       logger.info(`Purging ${tags.length} cache tags via ${action} on ${network}`);
 
       const operationName = action === 'delete'
-        ? 'akamai_ccu_deleteByTag'
-        : 'akamai_ccu_invalidateByTag';
+        ? 'akamai_ccu_post-delete-tag'
+        : 'akamai_ccu_post-invalidate-tag';
 
       const result = await executeOperation(
         operationName,
@@ -290,8 +290,8 @@ Example: "Purge all content for CP code 123456"`,
       logger.info(`Purging ${cpCodes.length} CP codes via ${action} on ${network}`);
 
       const operationName = action === 'delete'
-        ? 'akamai_ccu_deleteByCpcode'
-        : 'akamai_ccu_invalidateByCpcode';
+        ? 'akamai_ccu_post-delete-cpcode'
+        : 'akamai_ccu_post-invalidate-cpcode';
 
       const result = await executeOperation(
         operationName,
@@ -404,9 +404,9 @@ Example: "Bulk purge these 50 URLs from production"`,
 
       // Map type to operation
       const operationMap: Record<string, string> = {
-        url: action === 'delete' ? 'akamai_ccu_deleteByUrl' : 'akamai_ccu_invalidateByUrl',
-        tag: action === 'delete' ? 'akamai_ccu_deleteByTag' : 'akamai_ccu_invalidateByTag',
-        cpcode: action === 'delete' ? 'akamai_ccu_deleteByCpcode' : 'akamai_ccu_invalidateByCpcode',
+        url: action === 'delete' ? 'akamai_ccu_post-delete-url' : 'akamai_ccu_post-invalidate-url',
+        tag: action === 'delete' ? 'akamai_ccu_post-delete-tag' : 'akamai_ccu_post-invalidate-tag',
+        cpcode: action === 'delete' ? 'akamai_ccu_post-delete-cpcode' : 'akamai_ccu_post-invalidate-cpcode',
       };
 
       const operationName = operationMap[type];

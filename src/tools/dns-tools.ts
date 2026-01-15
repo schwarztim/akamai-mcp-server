@@ -69,7 +69,7 @@ Example: "Show me all my DNS zones"`,
 
       logger.info('Fetching DNS zones overview');
 
-      const zonesData = await executeOperation('akamai_config_dns_getZones', {}, {
+      const zonesData = await executeOperation('akamai_config_dns_get-zones', {}, {
         ...(search && { search }),
         ...(type && { types: type }),
       });
@@ -81,7 +81,7 @@ Example: "Show me all my DNS zones"`,
         zones.slice(0, 20).map(async (zone: any) => {
           try {
             const recordsData = await executeOperation(
-              'akamai_config_dns_getRecordSetTypes',
+              'akamai_config_dns_get-zone-name-types',
               { zone: zone.zone }
             );
             return {
@@ -182,7 +182,7 @@ Example: "Show me all A records for example.com"`,
       // If type specified, get specific record set
       if (type) {
         const recordsData = await executeOperation(
-          'akamai_config_dns_getRecordSets',
+          'akamai_config_dns_get-zones-zone-recordsets',
           { zone },
           { types: type }
         );
@@ -221,7 +221,7 @@ Example: "Show me all A records for example.com"`,
 
       // Get all record types first
       const typesData = await executeOperation(
-        'akamai_config_dns_getRecordSetTypes',
+        'akamai_config_dns_get-zone-name-types',
         { zone }
       );
 
@@ -232,7 +232,7 @@ Example: "Show me all A records for example.com"`,
       for (const t of types.slice(0, 10)) {
         try {
           const recordsData = await executeOperation(
-            'akamai_config_dns_getRecordSets',
+            'akamai_config_dns_get-zones-zone-recordsets',
             { zone },
             { types: t }
           );
@@ -345,7 +345,7 @@ Example: "Add A record for www.example.com pointing to 1.2.3.4"`,
       const fqdn = name.endsWith('.') ? name : (name.includes(zone) ? name : `${name}.${zone}`);
 
       await executeOperation(
-        'akamai_config_dns_createRecordSet',
+        'akamai_config_dns_post-zones-zone-names-name-types-type',
         { zone },
         {},
         {
@@ -436,7 +436,7 @@ Example: "Delete the A record for old.example.com"`,
       const fqdn = name.endsWith('.') ? name : (name.includes(zone) ? name : `${name}.${zone}`);
 
       await executeOperation(
-        'akamai_config_dns_deleteRecordSet',
+        'akamai_config_dns_delete-zone-name-type',
         { zone, name: fqdn, type: type.toUpperCase() }
       );
 

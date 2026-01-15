@@ -86,7 +86,7 @@ Example: "Diagnose https://www.example.com/page.html"`,
       };
 
       const result = await executeOperation(
-        'akamai_edge_diagnostics_postUrlHealthCheck',
+        'akamai_edge_diagnostics_post-url-health-check',
         {},
         {},
         requestBody
@@ -154,7 +154,7 @@ Example: "Show me edge locations in Europe"`,
 
       logger.info('Fetching edge locations');
 
-      const result = await executeOperation('akamai_edge_diagnostics_getEdgeLocations');
+      const result = await executeOperation('akamai_edge_diagnostics_get-edge-locations');
 
       let locations = result?.edgeLocations || [];
 
@@ -253,7 +253,7 @@ Example: "Test connectivity to origin server origin.example.com"`,
       };
 
       const result = await executeOperation(
-        'akamai_edge_diagnostics_postConnectivityProblems',
+        'akamai_edge_diagnostics_post-connectivity-problems',
         {},
         {},
         requestBody
@@ -323,7 +323,7 @@ Example: "What does Akamai error reference 12.abc123.1234567890.abcdef mean?"`,
       logger.info(`Translating error code: ${errorCode}`);
 
       const result = await executeOperation(
-        'akamai_edge_diagnostics_postTranslatedError',
+        'akamai_edge_diagnostics_post-error-translator',
         {},
         {},
         { errorCode }
@@ -418,7 +418,7 @@ Example: "Curl https://www.example.com from the London edge"`,
       };
 
       const result = await executeOperation(
-        'akamai_edge_diagnostics_postCurl',
+        'akamai_edge_diagnostics_post-curl',
         {},
         {},
         requestBody

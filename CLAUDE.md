@@ -51,25 +51,56 @@ This MCP server is designed for **iterative improvement with Claude Code CLI**, 
 
 Configure this MCP server in your Claude Code settings (`~/.claude/mcp.json` on macOS/Linux):
 
+**Option 1: Using ~/.edgerc (Recommended)**
+
+If you have a standard Akamai `.edgerc` file in your home directory, you only need:
+
 ```json
 {
-  "akamai": {
-    "command": "node",
-    "args": ["/absolute/path/to/akamai-mcp-server/dist/index.js"],
-    "env": {
-      "AKAMAI_HOST": "your-host.luna.akamaiapis.net",
-      "AKAMAI_CLIENT_TOKEN": "akab-your-client-token",
-      "AKAMAI_CLIENT_SECRET": "your-client-secret",
-      "AKAMAI_ACCESS_TOKEN": "akab-your-access-token",
-      "LOG_LEVEL": "info"
+  "mcpServers": {
+    "akamai": {
+      "command": "node",
+      "args": ["/absolute/path/to/akamai-mcp-server/dist/index.js"],
+      "env": {
+        "LOG_LEVEL": "info"
+      }
     }
   }
 }
 ```
 
+The server will automatically read credentials from `~/.edgerc` (the `[default]` section).
+
+**Option 2: Using Environment Variables**
+
+For explicit credential configuration:
+
+```json
+{
+  "mcpServers": {
+    "akamai": {
+      "command": "node",
+      "args": ["/absolute/path/to/akamai-mcp-server/dist/index.js"],
+      "env": {
+        "AKAMAI_HOST": "your-host.luna.akamaiapis.net",
+        "AKAMAI_CLIENT_TOKEN": "akab-your-client-token",
+        "AKAMAI_CLIENT_SECRET": "your-client-secret",
+        "AKAMAI_ACCESS_TOKEN": "akab-your-access-token",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
+
+**Additional .edgerc Options**:
+- `AKAMAI_EDGERC`: Custom path to .edgerc file (default: `~/.edgerc`)
+- `AKAMAI_EDGERC_SECTION`: Section to use (default: `default`)
+
 **Important**:
 - Use absolute paths in the config. Relative paths may not resolve correctly.
 - If you have other MCP servers configured, add the "akamai" entry alongside them in the same file.
+- Environment variables take precedence over .edgerc file settings.
 
 ### Iterative Development Workflow
 

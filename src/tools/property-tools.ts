@@ -81,10 +81,10 @@ Example: "Get details for property www.example.com"`,
       logger.info(`Getting details for property: ${propertyName}`);
 
       // First, find the property
-      const contractsData = await executeOperation('akamai_papi_listContracts');
+      const contractsData = await executeOperation('akamai_papi_get-contracts');
       const contracts = contractsData?.contracts?.items || [];
 
-      const groupsData = await executeOperation('akamai_papi_listGroups');
+      const groupsData = await executeOperation('akamai_papi_get-groups');
       const groups = groupsData?.groups?.items || [];
 
       // Search for the property across all contract/group combinations
@@ -97,7 +97,7 @@ Example: "Get details for property www.example.com"`,
         for (const group of groups) {
           try {
             const propsData = await executeOperation(
-              'akamai_papi_listProperties',
+              'akamai_papi_get-properties',
               {},
               { contractId: contract.contractId, groupId: group.groupId }
             );
@@ -136,7 +136,7 @@ Example: "Get details for property www.example.com"`,
 
       // Get hostnames
       const hostnamesData = await executeOperation(
-        'akamai_papi_listPropertyHostnames',
+        'akamai_papi_get-property-version-hostnames',
         { propertyId: foundProperty.propertyId },
         {
           contractId: propertyContract,
@@ -280,9 +280,9 @@ Example: "Activate property www.example.com version 5 to production"`,
       logger.info(`Activating property ${propertyId} v${version} to ${network}`);
 
       // First get the property to find contract/group
-      const contractsData = await executeOperation('akamai_papi_listContracts');
+      const contractsData = await executeOperation('akamai_papi_get-contracts');
       const contracts = contractsData?.contracts?.items || [];
-      const groupsData = await executeOperation('akamai_papi_listGroups');
+      const groupsData = await executeOperation('akamai_papi_get-groups');
       const groups = groupsData?.groups?.items || [];
 
       // Find property
@@ -293,7 +293,7 @@ Example: "Activate property www.example.com version 5 to production"`,
         for (const group of groups) {
           try {
             const propsData = await executeOperation(
-              'akamai_papi_listProperties',
+              'akamai_papi_get-properties',
               {},
               { contractId: contract.contractId, groupId: group.groupId }
             );
@@ -401,9 +401,9 @@ Example: "Check activation status for property prp_123456"`,
       const propertyId = args.propertyId as string;
 
       // Find property contract/group
-      const contractsData = await executeOperation('akamai_papi_listContracts');
+      const contractsData = await executeOperation('akamai_papi_get-contracts');
       const contracts = contractsData?.contracts?.items || [];
-      const groupsData = await executeOperation('akamai_papi_listGroups');
+      const groupsData = await executeOperation('akamai_papi_get-groups');
       const groups = groupsData?.groups?.items || [];
 
       let propertyContract: string = '';
@@ -413,7 +413,7 @@ Example: "Check activation status for property prp_123456"`,
         for (const group of groups) {
           try {
             const propsData = await executeOperation(
-              'akamai_papi_listProperties',
+              'akamai_papi_get-properties',
               {},
               { contractId: contract.contractId, groupId: group.groupId }
             );
@@ -535,9 +535,9 @@ Example: "Compare version 4 and version 5 of property prp_123456"`,
       const version2 = args.version2 as number;
 
       // Find property contract/group
-      const contractsData = await executeOperation('akamai_papi_listContracts');
+      const contractsData = await executeOperation('akamai_papi_get-contracts');
       const contracts = contractsData?.contracts?.items || [];
-      const groupsData = await executeOperation('akamai_papi_listGroups');
+      const groupsData = await executeOperation('akamai_papi_get-groups');
       const groups = groupsData?.groups?.items || [];
 
       let propertyContract: string = '';
@@ -547,7 +547,7 @@ Example: "Compare version 4 and version 5 of property prp_123456"`,
         for (const group of groups) {
           try {
             const propsData = await executeOperation(
-              'akamai_papi_listProperties',
+              'akamai_papi_get-properties',
               {},
               { contractId: contract.contractId, groupId: group.groupId }
             );
@@ -747,9 +747,9 @@ Example: "Find all properties with 'api' in the name"`,
       }
 
       // Manual search across all properties
-      const contractsData = await executeOperation('akamai_papi_listContracts');
+      const contractsData = await executeOperation('akamai_papi_get-contracts');
       const contracts = contractsData?.contracts?.items || [];
-      const groupsData = await executeOperation('akamai_papi_listGroups');
+      const groupsData = await executeOperation('akamai_papi_get-groups');
       const groups = groupsData?.groups?.items || [];
 
       const allProperties: any[] = [];
@@ -763,7 +763,7 @@ Example: "Find all properties with 'api' in the name"`,
 
           try {
             const propsData = await executeOperation(
-              'akamai_papi_listProperties',
+              'akamai_papi_get-properties',
               {},
               { contractId: contract.contractId, groupId: group.groupId }
             );

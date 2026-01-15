@@ -115,14 +115,14 @@ Options:
       logger.info('Aggregating all hostnames - starting parallel fetch');
 
       // Step 1: Get all contracts
-      const contractsData = await executeOperation('akamai_papi_listContracts');
+      const contractsData = await executeOperation('akamai_papi_get-contracts');
       const contracts = contractsData?.contracts?.items || [];
       logger.info(`Found ${contracts.length} contracts`);
 
       // Step 2: Get all groups (parallel across contracts)
       const groupPromises = contracts.map(async (contract: any) => {
         try {
-          const groupsData = await executeOperation('akamai_papi_listGroups');
+          const groupsData = await executeOperation('akamai_papi_get-groups');
           return (groupsData?.groups?.items || []).map((g: any) => ({
             ...g,
             contractId: contract.contractId,
@@ -153,7 +153,7 @@ Options:
           seenCombinations.add(key);
 
           propertyPromises.push(
-            executeOperation('akamai_papi_listProperties', {}, {
+            executeOperation('akamai_papi_get-properties', {}, {
               contractId: contract.contractId,
               groupId: group.groupId,
             })
@@ -193,7 +193,7 @@ Options:
         const batchPromises = batch.map(async (property: any) => {
           try {
             const hostnamesData = await executeOperation(
-              'akamai_papi_listPropertyHostnames',
+              'akamai_papi_get-property-version-hostnames',
               {
                 propertyId: property.propertyId,
               },
@@ -356,8 +356,8 @@ This is the fastest way to understand your Akamai setup.`,
       // Execute all in parallel
       const [profileData, contractsData, groupsData] = await Promise.all([
         executeOperation('akamai_identity_management_get-user-profile').catch(() => null),
-        executeOperation('akamai_papi_listContracts').catch(() => ({ contracts: { items: [] } })),
-        executeOperation('akamai_papi_listGroups').catch(() => ({ groups: { items: [] } })),
+        executeOperation('akamai_papi_get-contracts').catch(() => ({ contracts: { items: [] } })),
+        executeOperation('akamai_papi_get-groups').catch(() => ({ groups: { items: [] } })),
       ]);
 
       const contracts = contractsData?.contracts?.items || [];
@@ -368,7 +368,7 @@ This is the fastest way to understand your Akamai setup.`,
         groups.slice(0, 5).map(async (group: any) => {
           try {
             const data = await executeOperation(
-              'akamai_papi_listProperties',
+              'akamai_papi_get-properties',
               {},
               { contractId: contract.contractId, groupId: group.groupId }
             );
@@ -495,8 +495,8 @@ Options:
 
       // Get contracts and groups
       const [contractsData, groupsData] = await Promise.all([
-        executeOperation('akamai_papi_listContracts'),
-        executeOperation('akamai_papi_listGroups'),
+        executeOperation('akamai_papi_get-contracts'),
+        executeOperation('akamai_papi_get-groups'),
       ]);
 
       const contracts = contractsData?.contracts?.items || [];
@@ -513,7 +513,7 @@ Options:
           seenCombinations.add(key);
 
           propertyPromises.push(
-            executeOperation('akamai_papi_listProperties', {}, {
+            executeOperation('akamai_papi_get-properties', {}, {
               contractId: contract.contractId,
               groupId: group.groupId,
             })

@@ -64,8 +64,8 @@ This is your security dashboard in one call.`,
 
       // Get security configurations
       const [configsData, networkListsData] = await Promise.all([
-        executeOperation('akamai_appsec_getConfigs').catch(() => ({ configurations: [] })),
-        executeOperation('akamai_network_lists_getNetworkLists').catch(() => ({ networkLists: [] })),
+        executeOperation('akamai_appsec_get-configs').catch(() => ({ configurations: [] })),
+        executeOperation('akamai_network_lists_get-network-lists').catch(() => ({ networkLists: [] })),
       ]);
 
       const configs = configsData?.configurations || [];
@@ -76,7 +76,7 @@ This is your security dashboard in one call.`,
         configs.slice(0, 5).map(async (config: any) => {
           try {
             const versionsData = await executeOperation(
-              'akamai_appsec_getConfigVersions',
+              'akamai_appsec_get-config-versions',
               { configId: config.id }
             );
             const versions = versionsData?.versionList || [];
@@ -195,7 +195,7 @@ Example: "Show me WAF events from the last 6 hours"`,
 
       // Get config ID if not provided
       if (!configId) {
-        const configsData = await executeOperation('akamai_appsec_getConfigs');
+        const configsData = await executeOperation('akamai_appsec_get-configs');
         const configs = configsData?.configurations || [];
         if (configs.length === 0) {
           return {
@@ -295,7 +295,7 @@ Example: "Show me all IP blocklists"`,
       if (action === 'get' && listId) {
         // Get specific list
         const listData = await executeOperation(
-          'akamai_network_lists_getNetworkList',
+          'akamai_network_lists_get-network-list',
           { networkListId: listId }
         );
 
@@ -324,7 +324,7 @@ Example: "Show me all IP blocklists"`,
       }
 
       // List all network lists
-      const listsData = await executeOperation('akamai_network_lists_getNetworkLists');
+      const listsData = await executeOperation('akamai_network_lists_get-network-lists');
       let lists = listsData?.networkLists || [];
 
       // Filter by type
@@ -421,7 +421,7 @@ Example: "Add IP 1.2.3.4 to blocklist xyz"`,
 
       if (action === 'add') {
         await executeOperation(
-          'akamai_network_lists_appendListElements',
+          'akamai_network_lists_post-network-list-append',
           { networkListId: listId },
           {},
           { list: elements }
@@ -429,7 +429,7 @@ Example: "Add IP 1.2.3.4 to blocklist xyz"`,
       } else {
         // For remove, we need to get the list first, then update it
         const listData = await executeOperation(
-          'akamai_network_lists_getNetworkList',
+          'akamai_network_lists_get-network-list',
           { networkListId: listId }
         );
 
@@ -439,7 +439,7 @@ Example: "Add IP 1.2.3.4 to blocklist xyz"`,
         );
 
         await executeOperation(
-          'akamai_network_lists_updateNetworkList',
+          'akamai_network_lists_put-network-list',
           { networkListId: listId },
           {},
           { ...listData, list: newElements }
@@ -515,7 +515,7 @@ Example: "Show me details of security config 12345"`,
       // Get version if not specified
       if (!version) {
         const versionsData = await executeOperation(
-          'akamai_appsec_getConfigVersions',
+          'akamai_appsec_get-config-versions',
           { configId }
         );
         const versions = versionsData?.versionList || [];
@@ -532,8 +532,8 @@ Example: "Show me details of security config 12345"`,
 
       // Get config details
       const [configData, policiesData] = await Promise.all([
-        executeOperation('akamai_appsec_getConfig', { configId }),
-        executeOperation('akamai_appsec_getPolicies', { configId, version }).catch(() => ({})),
+        executeOperation('akamai_appsec_get-config', { configId }),
+        executeOperation('akamai_appsec_get-policies', { configId, version }).catch(() => ({})),
       ]);
 
       const policies = policiesData?.policies || [];

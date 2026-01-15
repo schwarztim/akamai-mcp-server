@@ -580,34 +580,48 @@ npm run validate    # Verify they loaded correctly
 
 ## Quick Reference: Common Claude Code Workflows
 
-### Exploring Available APIs
+**Key Principle:** Use natural language. Claude Code will discover and execute the right operations automatically.
+
+### Exploring Your Akamai Setup
 
 ```
-You: Show me all available Akamai products and their operation counts
-Claude: [Calls akamai_registry_stats to show product breakdown]
+You: What Akamai APIs are available to me?
+Claude: [Calls akamai_registry_stats automatically]
 
-You: List all pageable operations for the PAPI product
-Claude: [Calls akamai_list_operations with product: "papi", paginatable: true]
+You: List all my CDN properties
+Claude: [Searches for property operations, executes with pagination]
 
-You: Find all operations related to purging
-Claude: [Calls akamai_list_operations with query: "purge"]
+You: Show me DNS zones in my account
+Claude: [Finds and calls DNS zone listing operation]
+
+You: What EdgeWorkers do I have deployed?
+Claude: [Discovers EdgeWorker operations, lists them]
 ```
 
-### Making API Calls
+### Getting Account Information
 
 ```
-You: List all properties in my Akamai account with pagination
-Claude: [Calls akamai_raw_request with:
-  - toolName: "akamai_papi_listProperties"
-  - queryParams: { contractId: "...", groupId: "..." }
-  - paginate: true
-]
+You: Show me my Akamai profile
+Claude: [Searches for profile operations, retrieves your data]
 
-You: Purge these specific URLs from cache
-Claude: [Calls akamai_raw_request with:
-  - toolName: "akamai_ccu_purgeByUrl"
-  - body: { urls: [...], network: "production" }
-]
+You: Who are the users in my account?
+Claude: [Finds user listing operation, executes it]
+
+You: What's my last login date?
+Claude: [Gets profile, extracts login info]
+```
+
+### Managing Resources
+
+```
+You: Purge these URLs from cache: https://example.com/page1, https://example.com/page2
+Claude: [Finds purge operation, executes with URLs]
+
+You: What's the rule tree for property XYZ?
+Claude: [Searches for rule tree operation, gets configuration]
+
+You: Check the status of purge request ABC123
+Claude: [Finds status check operation, queries it]
 ```
 
 ### Iterating on Features

@@ -94,3 +94,4 @@ git commit --no-verify -m "message"  # Skips hooks
 ls -la .git/hooks/ | grep -E "(pre-push|post-commit)"
 ```
 # Automation Test
+

@@ -21,6 +21,7 @@ import {
   getListOperationsTool,
   getRegistryStatsTool,
 } from './generator/raw-request-tool.js';
+import { getAggregationTools } from './aggregation/aggregation-tools.js';
 
 /**
  * Main MCP server for Akamai APIs
@@ -77,7 +78,13 @@ class AkamaiMcpServer {
       this.utilityTools.set('akamai_list_operations', getListOperationsTool());
       this.utilityTools.set('akamai_registry_stats', getRegistryStatsTool());
 
-      this.logger.info(`Added ${this.utilityTools.size} utility tools`);
+      // Add aggregation tools for common high-level operations
+      const aggregationTools = getAggregationTools();
+      for (const tool of aggregationTools) {
+        this.utilityTools.set(tool.definition.name, tool);
+      }
+
+      this.logger.info(`Added ${this.utilityTools.size} utility tools (including ${aggregationTools.length} aggregation tools)`);
 
       // Log coverage summary
       this.logger.info('Coverage by product:', stats.operationsByProduct);

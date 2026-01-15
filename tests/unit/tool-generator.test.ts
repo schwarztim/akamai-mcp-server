@@ -50,7 +50,8 @@ describe('Tool Generator', () => {
       expect(tool).toHaveProperty('definition');
       expect(tool).toHaveProperty('handler');
       expect(tool.definition.name).toBe('akamai_papi_listProperties');
-      expect(tool.definition.description).toContain('List all properties');
+      // Description is intentionally empty to minimize context bloat with 1,444 tools
+      expect(tool.definition.description).toBe('');
       expect(tool.definition.inputSchema).toBeDefined();
     });
 
@@ -63,7 +64,8 @@ describe('Tool Generator', () => {
 
       expect(tool.definition.inputSchema.properties).toHaveProperty('paginate');
       expect(tool.definition.inputSchema.properties).toHaveProperty('maxPages');
-      expect(tool.definition.description).toContain('pagination');
+      // Description is intentionally empty to minimize context bloat with 1,444 tools
+      expect(tool.definition.description).toBe('');
     });
 
     it('should not include pagination options for non-paginatable operations', async () => {
@@ -207,7 +209,7 @@ describe('Tool Generator', () => {
   });
 
   describe('Tool Description Generation', () => {
-    it('should include method and path in description', async () => {
+    it('should return empty description to minimize context bloat', async () => {
       const mockOperation = createMockOperation({
         method: 'POST',
         path: '/test/endpoint',
@@ -215,20 +217,22 @@ describe('Tool Generator', () => {
 
       const tool = await generator.generate(mockOperation);
 
-      expect(tool.definition.description).toContain('POST');
-      expect(tool.definition.description).toContain('/test/endpoint');
+      // Description is intentionally empty to minimize context bloat with 1,444 tools
+      // Tool names are descriptive enough (akamai_product_operation format)
+      expect(tool.definition.description).toBe('');
     });
 
-    it('should include product and version in description', async () => {
+    it('should consistently return empty descriptions for all operations', async () => {
       const mockOperation = createMockOperation({
         product: 'papi',
         version: 'v1',
+        summary: 'Some detailed summary',
       });
 
       const tool = await generator.generate(mockOperation);
 
-      expect(tool.definition.description).toContain('papi');
-      expect(tool.definition.description).toContain('v1');
+      // Description is intentionally empty to minimize context bloat with 1,444 tools
+      expect(tool.definition.description).toBe('');
     });
   });
 });

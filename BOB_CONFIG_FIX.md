@@ -1,84 +1,84 @@
-# Bob (Claude Code) Per-Project MCP Configuration
+# Bob (Claude Code) MCP Configuration
 
-## The Issue
+## Global Configuration (Recommended)
 
-Bob (a custom Claude Code build) uses **per-project MCP server configuration** that overrides global MCP settings.
+The Akamai MCP server is configured at the **top level** of bob's config, making it available from **any directory**.
 
-### Configuration Locations
+### Configuration Location
 
-**Global MCP config** (used by standard Claude Code):
-```
-~/.claude/mcp.json
-```
-
-**Bob's per-project config**:
 ```
 ~/.config/bob/.claude.json
 ```
 
-Structure:
+### Structure
+
 ```json
 {
-  "projects": {
-    "/Users/timothy.schwarz": {
-      "mcpServers": {
-        // Project-specific MCP servers go here
-        // If empty {}, NO MCP servers will load for this project!
+  "mcpServers": {
+    "akamai": {
+      "command": "node",
+      "args": ["/Users/timothy.schwarz/Scripts/akamai-mcp-server/dist/index.js"],
+      "env": {
+        "AKAMAI_HOST": "...",
+        "AKAMAI_CLIENT_TOKEN": "...",
+        "AKAMAI_CLIENT_SECRET": "...",
+        "AKAMAI_ACCESS_TOKEN": "..."
       }
     }
+  },
+  "projects": {
+    // Per-project settings (optional)
   }
 }
 ```
 
-## The Fix
+## How It Works
 
-Added Akamai MCP server directly to the project configuration:
+1. **Top-level `mcpServers`**: Available globally from any directory
+2. **Per-project `mcpServers`**: Override/extend global settings for specific directories
 
-```bash
-# Edit ~/.config/bob/.claude.json and add to the mcpServers object:
-"akamai": {
-  "command": "node",
-  "args": ["/Users/timothy.schwarz/Scripts/akamai-mcp-server/dist/index.js"],
-  "env": {
-    "AKAMAI_HOST": "akab-gl4p5ld6nhzjpjjp-dmcffit445cneu3o.luna.akamaiapis.net",
-    "AKAMAI_CLIENT_TOKEN": "akab-hccjvdj77xex5ca6-vo7dtrphchcu4ijx",
-    "AKAMAI_CLIENT_SECRET": "ZFdIAOfpfxDXst50vPyJrw2IP5kmhxOFEQ49Vuixk2c=",
-    "AKAMAI_ACCESS_TOKEN": "akab-2uofdqybekqtp5nt-ly244r3vczm5ijom"
-  }
-}
-```
+## Available Tools
 
-## Important Notes
+After restarting bob, you should have access to:
 
-1. **Per-Project**: Each directory you work in with bob has its own `mcpServers` configuration
-2. **Override Behavior**: Project-specific config overrides global config completely
-3. **Empty = No Servers**: If `mcpServers: {}` is empty, no MCP servers load (even if configured globally)
-4. **Restart Required**: Changes only take effect when starting a new bob session
+### Utility Tools
+- `akamai_raw_request` - Execute any of 1,444 Akamai operations
+- `akamai_list_operations` - Search and discover operations
+- `akamai_registry_stats` - View API coverage statistics
+
+### Aggregation Tools (High Performance)
+- `akamai_list_all_hostnames` - Get ALL hostnames in ~30 seconds
+- `akamai_account_overview` - Comprehensive account summary
+- `akamai_list_all_properties` - List all CDN properties
 
 ## Verification
 
-After restarting bob, check available tools with:
+After restarting bob from any directory:
 ```
-What MCP tools are available?
+Show me my Akamai account overview
 ```
 
-You should see:
-- `akamai_raw_request`
-- `akamai_list_operations`
-- `akamai_registry_stats`
+If the MCP server is loaded, you'll get results. If not, bob will fall back to CLI commands.
 
-## For Other Projects
+## Troubleshooting
 
-If you want Akamai tools in a different project directory, add the configuration to that project's entry in `.claude.json`:
+### MCP Server Not Loading
 
-```json
-{
-  "projects": {
-    "/path/to/other/project": {
-      "mcpServers": {
-        "akamai": { ... }
-      }
-    }
-  }
-}
-```
+1. Check the config exists:
+   ```bash
+   cat ~/.config/bob/.claude.json | jq '.mcpServers'
+   ```
+
+2. Verify the server starts:
+   ```bash
+   node /Users/timothy.schwarz/Scripts/akamai-mcp-server/dist/index.js
+   ```
+   (Should show "Akamai MCP Server started successfully")
+
+3. Restart bob completely (not just a new chat)
+
+### Per-Project Override
+
+If a project has `"mcpServers": {}` in its config, it will override the global setting with no servers. Either:
+- Remove the empty `mcpServers` from the project config, OR
+- Add the Akamai config to that project's `mcpServers`

@@ -230,9 +230,9 @@ Should show:
 
 ## Configuration Files
 
-**Bob's project config**:
+**Bob's global config** (works from any directory):
 ```
-~/.config/bob/.claude.json
+~/.config/bob/.claude.json → mcpServers.akamai
 ```
 
 **Standard Claude Code config**:
@@ -244,6 +244,8 @@ Should show:
 ```
 ~/Scripts/akamai-mcp-server/dist/index.js
 ```
+
+**Note**: The Akamai MCP server is configured at the top level of bob's config, making it available globally from any directory.
 
 ## Additional Resources
 

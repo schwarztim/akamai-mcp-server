@@ -6,9 +6,9 @@ The Akamai MCP server has been configured for both Claude Code and Claude Deskto
 
 ### Configuration Files
 
-**Claude Code:**
+**Claude Code (CLI):**
 ```
-~/.config/claude-code/config.json
+~/.claude/mcp.json
 ```
 
 **Claude Desktop:**
@@ -16,23 +16,23 @@ The Akamai MCP server has been configured for both Claude Code and Claude Deskto
 ~/Library/Application Support/Claude/claude_desktop_config.json
 ```
 
-Both files contain:
+The Claude Code configuration (`~/.claude/mcp.json`) contains:
 ```json
 {
-  "mcpServers": {
-    "akamai": {
-      "command": "node",
-      "args": ["/Users/timothy.schwarz/Scripts/akamai-mcp-server/dist/index.js"],
-      "env": {
-        "AKAMAI_HOST": "akab-gl4p5ld6nhzjpjjp-dmcffit445cneu3o.luna.akamaiapis.net",
-        "AKAMAI_CLIENT_TOKEN": "akab-hccjvdj77xex5ca6-vo7dtrphchcu4ijx",
-        "AKAMAI_CLIENT_SECRET": "ZFdIAOfpfxDXst50vPyJrw2IP5kmhxOFEQ49Vuixk2c=",
-        "AKAMAI_ACCESS_TOKEN": "akab-2uofdqybekqtp5nt-ly244r3vczm5ijom"
-      }
+  "akamai": {
+    "command": "node",
+    "args": ["/Users/timothy.schwarz/Scripts/akamai-mcp-server/dist/index.js"],
+    "env": {
+      "AKAMAI_HOST": "akab-gl4p5ld6nhzjpjjp-dmcffit445cneu3o.luna.akamaiapis.net",
+      "AKAMAI_CLIENT_TOKEN": "akab-hccjvdj77xex5ca6-vo7dtrphchcu4ijx",
+      "AKAMAI_CLIENT_SECRET": "ZFdIAOfpfxDXst50vPyJrw2IP5kmhxOFEQ49Vuixk2c=",
+      "AKAMAI_ACCESS_TOKEN": "akab-2uofdqybekqtp5nt-ly244r3vczm5ijom"
     }
   }
 }
 ```
+
+**Note:** If you have other MCP servers configured, add the "akamai" entry alongside them in the same JSON file.
 
 ## 🚀 How to Use
 
@@ -266,12 +266,13 @@ Claude will combine multiple operations to analyze your setup.
 
 ## ✅ Verification Checklist
 
-- [x] Config file exists at `~/.config/claude-code/config.json`
+- [x] Config file exists at `~/.claude/mcp.json`
+- [x] Akamai server added to config
 - [x] Server builds successfully (`npm run build`)
 - [x] All tests pass (`npm test` - 153/153)
 - [x] Health check succeeds (`npm run health`)
 - [x] Registry validates (`npm run validate` - 1,444 operations)
-- [x] Profile retrieval works (tested in this session)
+- [x] Profile retrieval works (tested via direct API call)
 - [ ] New Claude Code session can see Akamai tools (restart required)
 - [ ] Tools execute successfully (test in new session)
 

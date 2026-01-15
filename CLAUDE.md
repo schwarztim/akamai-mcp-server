@@ -49,27 +49,27 @@ This MCP server is designed for **iterative improvement with Claude Code CLI**, 
 
 ### Setup with Claude Code
 
-Configure this MCP server in your Claude Code settings (`~/.config/claude-code/config.json` on Linux/macOS or `%APPDATA%\claude-code\config.json` on Windows):
+Configure this MCP server in your Claude Code settings (`~/.claude/mcp.json` on macOS/Linux):
 
 ```json
 {
-  "mcpServers": {
-    "akamai": {
-      "command": "node",
-      "args": ["/absolute/path/to/akamai-mcp-server/dist/index.js"],
-      "env": {
-        "AKAMAI_HOST": "your-host.luna.akamaiapis.net",
-        "AKAMAI_CLIENT_TOKEN": "akab-your-client-token",
-        "AKAMAI_CLIENT_SECRET": "your-client-secret",
-        "AKAMAI_ACCESS_TOKEN": "akab-your-access-token",
-        "LOG_LEVEL": "info"
-      }
+  "akamai": {
+    "command": "node",
+    "args": ["/absolute/path/to/akamai-mcp-server/dist/index.js"],
+    "env": {
+      "AKAMAI_HOST": "your-host.luna.akamaiapis.net",
+      "AKAMAI_CLIENT_TOKEN": "akab-your-client-token",
+      "AKAMAI_CLIENT_SECRET": "your-client-secret",
+      "AKAMAI_ACCESS_TOKEN": "akab-your-access-token",
+      "LOG_LEVEL": "info"
     }
   }
 }
 ```
 
-**Important**: Use absolute paths in the config. Relative paths may not resolve correctly.
+**Important**:
+- Use absolute paths in the config. Relative paths may not resolve correctly.
+- If you have other MCP servers configured, add the "akamai" entry alongside them in the same file.
 
 ### Iterative Development Workflow
 

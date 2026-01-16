@@ -33,6 +33,20 @@ export interface ExecutionOptions {
 }
 
 /**
+ * Rate limit information from Akamai API headers
+ */
+export interface RateLimitInfo {
+  /** Maximum requests allowed in current window */
+  limit?: number;
+
+  /** Requests remaining in current window */
+  remaining?: number;
+
+  /** Time when rate limit resets (ISO 8601 format) */
+  nextReset?: string;
+}
+
+/**
  * Execution result
  */
 export interface ExecutionResult {
@@ -56,6 +70,9 @@ export interface ExecutionResult {
 
   /** Total items (if available in pagination metadata) */
   totalItems?: number;
+
+  /** Rate limit information (if available in response headers) */
+  rateLimit?: RateLimitInfo;
 }
 
 /**
@@ -237,6 +254,25 @@ export class UniversalExecutor {
   }
 
   /**
+   * Extract rate limit information from response headers
+   */
+  private extractRateLimitInfo(headers: Record<string, string>): RateLimitInfo | undefined {
+    const limit = headers['akamai-ratelimit-limit'] || headers['Akamai-RateLimit-Limit'];
+    const remaining = headers['akamai-ratelimit-remaining'] || headers['Akamai-RateLimit-Remaining'];
+    const nextReset = headers['akamai-ratelimit-next'] || headers['Akamai-RateLimit-Next'];
+
+    if (!limit && !remaining && !nextReset) {
+      return undefined;
+    }
+
+    return {
+      limit: limit ? parseInt(limit, 10) : undefined,
+      remaining: remaining ? parseInt(remaining, 10) : undefined,
+      nextReset: nextReset || undefined,
+    };
+  }
+
+  /**
    * Execute single request
    */
   private async executeSingle(
@@ -250,7 +286,7 @@ export class UniversalExecutor {
     const method = operation.method;
 
     try {
-      let response: unknown;
+      let response: any;
 
       switch (method) {
         case 'GET':
@@ -273,11 +309,20 @@ export class UniversalExecutor {
           throw new Error(`Unsupported HTTP method: ${method}`);
       }
 
-      return {
-        status: 200, // EdgeGrid client returns body directly on success
-        headers: {},
-        body: response,
+      const result: ExecutionResult = {
+        status: response.statusCode || 200,
+        headers: response.headers || {},
+        body: response.body,
+        requestId: response.headers?.['x-request-id'] || response.headers?.['X-Request-ID'],
       };
+
+      // Extract rate limit info if available
+      const rateLimit = this.extractRateLimitInfo(response.headers || {});
+      if (rateLimit) {
+        result.rateLimit = rateLimit;
+      }
+
+      return result;
     } catch (error: any) {
       // Normalize errors
       if (error.response) {
@@ -285,7 +330,7 @@ export class UniversalExecutor {
           error.message || 'API request failed',
           error.response.status,
           error.response.data,
-          error.response.headers?.['x-request-id']
+          error.response.headers?.['x-request-id'] || error.response.headers?.['X-Request-ID']
         );
       }
 

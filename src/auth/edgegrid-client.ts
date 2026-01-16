@@ -4,6 +4,15 @@ import { getLogger, logRequest, logResponse, logError } from '../utils/logger.js
 import { withRetry, RateLimiter } from '../utils/retry.js';
 
 /**
+ * Response from EdgeGrid client including headers
+ */
+export interface EdgeGridResponse<T = unknown> {
+  body: T;
+  statusCode: number;
+  headers: Record<string, string>;
+}
+
+/**
  * EdgeGrid API client with authentication and retry logic
  */
 export class EdgeGridClient {
@@ -36,7 +45,7 @@ export class EdgeGridClient {
     path: string,
     params?: Record<string, string | number | boolean>,
     headers?: Record<string, string>
-  ): Promise<T> {
+  ): Promise<EdgeGridResponse<T>> {
     return this.request<T>('GET', path, undefined, params, headers);
   }
 
@@ -48,7 +57,7 @@ export class EdgeGridClient {
     body?: unknown,
     params?: Record<string, string | number | boolean>,
     headers?: Record<string, string>
-  ): Promise<T> {
+  ): Promise<EdgeGridResponse<T>> {
     return this.request<T>('POST', path, body, params, headers);
   }
 
@@ -60,7 +69,7 @@ export class EdgeGridClient {
     body?: unknown,
     params?: Record<string, string | number | boolean>,
     headers?: Record<string, string>
-  ): Promise<T> {
+  ): Promise<EdgeGridResponse<T>> {
     return this.request<T>('PUT', path, body, params, headers);
   }
 
@@ -71,7 +80,7 @@ export class EdgeGridClient {
     path: string,
     params?: Record<string, string | number | boolean>,
     headers?: Record<string, string>
-  ): Promise<T> {
+  ): Promise<EdgeGridResponse<T>> {
     return this.request<T>('DELETE', path, undefined, params, headers);
   }
 
@@ -84,7 +93,7 @@ export class EdgeGridClient {
     body?: unknown,
     params?: Record<string, string | number | boolean>,
     customHeaders?: Record<string, string>
-  ): Promise<T> {
+  ): Promise<EdgeGridResponse<T>> {
     // Apply rate limiting
     await this.rateLimiter.acquire();
 
@@ -94,7 +103,7 @@ export class EdgeGridClient {
       const startTime = Date.now();
 
       try {
-        const response = await new Promise<{ body: T; statusCode: number }>((resolve, reject) => {
+        const response = await new Promise<{ body: T; statusCode: number; headers: Record<string, string> }>((resolve, reject) => {
           // Build headers: start with custom headers, add Content-Type if body present
           const headers: Record<string, string> = { ...customHeaders };
           if (body) {
@@ -125,12 +134,14 @@ export class EdgeGridClient {
               resolve({
                 body: parsedBody as T,
                 statusCode: response.statusCode || 200,
+                headers: response.headers || {},
               });
             } catch (parseError) {
               // Return raw body if not JSON
               resolve({
                 body: responseBody as T,
                 statusCode: response.statusCode || 200,
+                headers: response.headers || {},
               });
             }
           });
@@ -145,11 +156,12 @@ export class EdgeGridClient {
           error.response = {
             status: response.statusCode,
             data: response.body,
+            headers: response.headers,
           };
           throw error;
         }
 
-        return response.body;
+        return response;
       } catch (error) {
         logError(error as Error, {
           method,
